@@ -1,0 +1,6 @@
+fastapi==0.115.4
+MAVProxy==1.8.71
+pydantic==2.9.2
+pymavlink==2.4.41
+Requests==2.32.3
+uvicorn==0.32.0
