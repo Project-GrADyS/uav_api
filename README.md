@@ -13,6 +13,40 @@ To install Uav_control simply clone this repository.
 To install required python packages run the command bellow from the root folder of the repository:
 
   `pip3 install -r requirements.txt`
+# Executing a Real flight
+## Starting Uav_control
+To start the uav_control API, run the following command:
+
+  `python3 uav_api.py --port [port for API] --uav_connection [ardupilot_connection] --connection_type [udpin or updout] --sysid [sysid for ardupilot]`
+  
+Alternatively, you can use a configuration file in the .ini format.
+
+This file is located at `flight_examples/config.ini`
+```
+[API]
+port = 8020
+uav_connection = 127.0.0.1:17171
+connection_type = udpin
+sysid = 12
+```
+And run the command:
+
+  `python3 uav_api.py --config flight_examples/config.ini`
+
+To get better insight on the arguments for `uav_api.py` run the command bellow:
+
+  `python3 uav_api --help`
+## Testing API
+To verify the initialization of the API go to the endpoint `localhost:[your_port]/docs`.
+![image](https://github.com/user-attachments/assets/6d1f9b6c-f69c-4381-98f0-7adec7311c15)
+
+Once inside the web page, scroll to telemetry router and execute the `telemetry/general` endpoint.
+![image](https://github.com/user-attachments/assets/4d1922a7-91c3-4873-81cc-5db9961a2e18)
+
+If everything is fine, the answer should look like this.
+![image](https://github.com/user-attachments/assets/47e7c802-6411-4864-9f1c-280327c4303c)
+
+And that's it! You can start consuming the Uav_control API
 # Executing a Simulated flight
 ## Starting Uav_control
 To instantiate the API, run the script `uav_api.py` through the following command:
@@ -29,10 +63,10 @@ To get visual feedback of drone position and telemetry use Mission Planner, or a
 
 ![image](https://github.com/user-attachments/assets/b7928581-89c6-46c0-9f02-3bd8edd30570)
 
-## Flying through scripts
+# Flying through scripts
 One of the perks of using Uav_control is simplifying UAV flights coordinated by scripts. Here are some examples:
 
-### Simple Takeoff and Landing
+## Simple Takeoff and Landing
 This file is located at `flight_examples/takeoff_land.py`
 ```python
 import requests
@@ -62,7 +96,7 @@ print("Vehicle landed.")
 ```
 
 
-### NED Square
+## NED Square
 In this example the uav will move following a square with 100 meters side. This file is located at `flight_examples/ned_square`.
 ```python
 import requests
@@ -111,7 +145,7 @@ if rtl_result.status_code != 200:
 print("Vehicle landed at launch.")
 ```
 
-### NED Square (Polling)
+## NED Square (Polling)
 This example does the same thing as the last one but this time instead of using the `go_to_ned_wait` endpoint we will take a polling aproach using `go_to_ned`. While more verbose, this way of verifying position allows your program to do other things while the uav has not arrived to the specified location. This file is located at `flight_examples/ned_square_polling.py`.
 ```python
 import requests
