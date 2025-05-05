@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from copter import Copter
-from copter_connection import get_copter_instance
-from classes.pos import GPS_pos, Local_pos
+from uav_api.copter import Copter
+from uav_api.copter_connection import get_copter_instance
 
 telemetry_router = APIRouter(
     prefix="/telemetry",

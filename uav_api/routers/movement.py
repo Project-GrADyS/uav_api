@@ -1,8 +1,8 @@
 from time import sleep
 from fastapi import APIRouter, Depends, HTTPException
-from copter import Copter
-from copter_connection import get_copter_instance
-from classes.pos import GPS_pos, Local_pos
+from uav_api.copter import Copter
+from uav_api.copter_connection import get_copter_instance
+from uav_api.classes.pos import GPS_pos, Local_pos
 
 movement_router = APIRouter(
     prefix = "/movement",

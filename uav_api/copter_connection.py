@@ -1,4 +1,4 @@
-from copter import Copter
+from uav_api.copter import Copter
 
 copter = None
 

@@ -1,42 +1,35 @@
 import os
-import uvicorn
-import logging
-import time
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from uav_args import parse_args
-from copter_connection import get_copter_instance
-from routers.movement import movement_router
-from routers.command import command_router
-from routers.telemetry import telemetry_router
-from log import set_log_config
+from uav_api.copter_connection import get_copter_instance
+from uav_api.routers.movement import movement_router
+from uav_api.routers.command import command_router
+from uav_api.routers.telemetry import telemetry_router
+from uav_api.log import set_log_config
+from uav_api.args import read_args_from_env
 
-args = parse_args()
-
-if __name__ == '__main__':
-    uvicorn.run("uav_api:app", host="0.0.0.0", port=int(args.port), log_level="debug", reload=True)
-    exit()
+args = read_args_from_env()
 
 metadata = [
-    {
-        "name": "movement",
-        "description": "Provides GUIDED movement commands for UAV"
-    },
-    {
-        "name": "command",
-        "description": "Provides general GUIDED commands for UAV"
-    },
-    {
-        "name": "telemetry",
-        "description": "Provides telemetry of the UAV"
-    }
+{
+    "name": "movement",
+    "description": "Provides GUIDED movement commands for UAV"
+},
+{
+    "name": "command",
+    "description": "Provides general GUIDED commands for UAV"
+},
+{
+    "name": "telemetry",
+    "description": "Provides telemetry of the UAV"
+}
 ]
 
 description = f"""
 ## COPTER INFORMATION
-* SYSID = **{args.sysid}**
-* CONNECTION_STRING = **{args.uav_connection}**
+* SYSID = **{10}**
+* CONNECTION_STRING = **{'aaa'}**
 """
 
 @asynccontextmanager

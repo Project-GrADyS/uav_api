@@ -2,11 +2,17 @@ import os
 import requests
 import time
 
+from uav_api.run_api import run_with_args
+from multiprocessing import Process
+
 def start_drone(node_id, starting_position):
     node_id = int(node_id) + 10
     print(f"STARTING NODE {node_id}")
 
-    os.system(f"python3 ./gradysim/uav_control/uav_api.py --simulated true --sysid {node_id} --port {8000+node_id} --uav_connection 127.0.0.1:17{171 + node_id} --speedup 2 --log_console COPTER --log_path ../../uav_logs&")
+    raw_args = ['--simulated', 'true', '--sysid', f'{node_id}', '--port', f'{8000+node_id}', '--uav_connection', f'127.0.0.1:17{171+node_id}', '--speedup', '1', '--log_console', 'COPTER', '--log_path', '../../uav_logs']
+
+    api_process = run_with_args(raw_args)
+    print(f"[NODE-{node_id}] API process started.")
     
     drone_url = f"http://localhost:{8000+node_id}"
 
@@ -31,8 +37,8 @@ def start_drone(node_id, starting_position):
         raise(f"[NODE-{node_id}] Failed to go to start position.")
     print(f"[NODE-{node_id}] Go to start position complete.")
     
-    return drone_url
+    return (drone_url, api_process)
 
-def kill_drones():
-    os.system("pkill -f uav_api.py")
-    os.system("pkill xterm")
+def kill_drones(drone_process):
+    for process in drone_process:
+        process.terminate()

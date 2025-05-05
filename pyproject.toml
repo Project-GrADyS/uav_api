@@ -3,12 +3,12 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["uav-api*"]
+include = ["uav_api*"]
 
 [project]
-name = "uav-api"
+name = "uav_api"
 version = "0.0.1"
-description = "Uav-api is a python package that provides a HTTP interface for MAVLink commands for ardupilot vehicles"
+description = "Uav_api is a python package that provides a HTTP interface for MAVLink commands for ardupilot vehicles"
 keywords = ["mavlink", "http", "simulation", "gradys", "LAC", "PUC", "drone", "ardupilot"]
 authors = [
     { name = "Francisco Meirelles Fleury", email = "franmeifleury@gmail.com" }
