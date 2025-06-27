@@ -1,21 +1,21 @@
-# Uav_control
-This is the repository for Uav_control, an API for UAV autonomous flights. The Uav_control API enables UAV movement, telemetry and basic command execution such as RTL and TAKEOFF through HTTP requests, facilitating remote controlled flights, both programmatically and manually. In addition to that, Uav_control supports protocol execution for autonomous flights, oferring the same interface as gradysim-nextgen simulator. At last but not least, Uav_control can be used for simulations based on Ardupilot's SITL. 
+# Uav_API
+This is the repository for Uav_API, an API for UAV autonomous flights. The Uav_API API enables UAV movement, telemetry and basic command execution such as RTL and TAKEOFF through HTTP requests, facilitating remote controlled flights, both programmatically and manually. In addition to that, Uav_API supports protocol execution for autonomous flights, oferring the same interface as gradysim-nextgen simulator. At last but not least, Uav_API can be used for simulations based on Ardupilot's SITL. 
 
 # Installation
 ## Prerequisites
 Python 3.10 is required
 If simulated flights are intended, installing Ardupilot's codebase is necessary. To do that follow the instructions at https://ardupilot.org/dev/docs/where-to-get-the-code.html (Don't forget to build the environment after cloning). In addition to that, following the steps for running the SITL is also required, which are stated at https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
 ## Cloning the repository
-To install Uav_control simply clone this repository.
+To install Uav_API simply clone this repository.
   
-  `git clone git@github.com:Project-GrADyS/uav_control.git`
+  `git clone git@github.com:Project-GrADyS/Uav_API.git`
 ## Install required packages
 To install required python packages run the command bellow from the root folder of the repository:
 
   `pip3 install -r requirements.txt`
 # Executing a Real flight
-## Starting Uav_control
-To start the uav_control API, run the following command:
+## Starting Uav_API
+To start the Uav_API API, run the following command:
 
   `python3 uav_api.py --port [port for API] --uav_connection [ardupilot_connection] --connection_type [udpin or updout] --sysid [sysid for ardupilot]`
   
@@ -46,13 +46,13 @@ Once inside the web page, scroll to telemetry router and execute the `telemetry/
 If everything is fine, the answer should look like this.
 ![image](https://github.com/user-attachments/assets/47e7c802-6411-4864-9f1c-280327c4303c)
 
-And that's it! You can start consuming the Uav_control API
+And that's it! You can start consuming the Uav_API API
 # Executing a Simulated flight
-## Starting Uav_control
+## Starting Uav_API
 To instantiate the API, run the script `uav_api.py` through the following command:
   
   `python3 uav_api.py --simulated true`
-This command initiates both the SITL, and the Uav_control API. The connection addres of the SITL instance is `127.0.0.1:17171` and the api is hosted at localhost:8000 by default but both of this parameters can be modified by arguments.
+This command initiates both the SITL, and the Uav_API API. The connection addres of the SITL instance is `127.0.0.1:17171` and the api is hosted at localhost:8000 by default but both of this parameters can be modified by arguments.
 
 ## Testing and feedback
 To manually test the api access the auto-generated swagger endpoint at `http://localhost:8000/docs`. 
@@ -64,7 +64,7 @@ To get visual feedback of drone position and telemetry use Mission Planner, or a
 ![image](https://github.com/user-attachments/assets/b7928581-89c6-46c0-9f02-3bd8edd30570)
 
 # Flying through scripts
-One of the perks of using Uav_control is simplifying UAV flights coordinated by scripts. Here are some examples:
+One of the perks of using Uav_API is simplifying UAV flights coordinated by scripts. Here are some examples:
 
 ## Simple Takeoff and Landing
 This file is located at `flight_examples/takeoff_land.py`
