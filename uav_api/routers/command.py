@@ -79,3 +79,11 @@ def set_descent_speed(new_v: int, uav: Copter = Depends(get_copter_instance)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"CHANGE_DESCENT_SPEED FAIL: {e}")
     return {"result": f"Descent speed set to {new_v}m/s"}
+
+@command_router.get("/set_sim_speedup", tags=["command"], description=f"Changes copter simulation speedup factor")
+def set_sim_speedup(sim_factor, uav: Copter = Depends(get_copter_instance)):
+    try:
+        uav.set_parameter("SIM_SPEEDUP", sim_factor)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"CHANGE_SIM_SPEEDUP FAIL: {e}")
+    return {"result": f"Simulation speedup set to {sim_factor}x"}
