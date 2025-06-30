@@ -81,7 +81,7 @@ def set_descent_speed(new_v: int, uav: Copter = Depends(get_copter_instance)):
     return {"result": f"Descent speed set to {new_v}m/s"}
 
 @command_router.get("/set_sim_speedup", tags=["command"], description=f"Changes copter simulation speedup factor")
-def set_sim_speedup(sim_factor, uav: Copter = Depends(get_copter_instance)):
+def set_sim_speedup(sim_factor: float, uav: Copter = Depends(get_copter_instance)):
     try:
         uav.set_parameter("SIM_SPEEDUP", sim_factor)
     except Exception as e:
