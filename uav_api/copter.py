@@ -1798,13 +1798,11 @@ Also, ignores heartbeats not from our target system"""
         compass_msg = self.get_message("MAG_CAL_REPORT", timeout=timeout)
         return compass_msg
     
-    def set_parameter(self, param_name, value, timeout=10):
+    def set_sim_speedup(self, value, timeout=10):
         """Set a parameter on the vehicle."""
-        self.progress("Setting parameter %s to %s" % (param_name, value))
+        self.progress("Setting parameter SIM_SPEEDUP to %s" % (value))
         self.mav.param_set_send(
-            self.target_system,
-            self.target_component,
-            param_name.encode('utf-8'),
+            b"SIM_SPEEDUP",  # parameter name
             value,
             mavutil.mavlink.MAV_PARAM_TYPE_REAL32
         )
@@ -1812,6 +1810,6 @@ Also, ignores heartbeats not from our target system"""
         start_time = time.time()
         while start_time + timeout > time.time():
             message = self.mav.recv_match(type='PARAM_VALUE', blocking=True)
-            if message.param_id.decode('utf-8').strip('\x00') == param_name:
-                print(f"Set {param_name} to {message.param_value}")
+            if message.param_id.decode('utf-8').strip('\x00') == "SIM_SPEEDUP":
+                print(f"Set {"SIM_SPEEDUP":} to {message.param_value}")
                 break
