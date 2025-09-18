@@ -1,5 +1,5 @@
-# Uav_control
-This is the repository for Uav_control, an API for UAV autonomous flights. The Uav_control API enables UAV movement, telemetry and basic command execution such as RTL and TAKEOFF through HTTP requests, facilitating remote controlled flights, both programmatically and manually. In addition to that, Uav_control supports protocol execution for autonomous flights, oferring the same interface as gradysim-nextgen simulator. At last but not least, Uav_control can be used for simulations based on Ardupilot's SITL. 
+# Uav_api
+This is the repository for Uav_api, an API for UAV autonomous flights. The Uav_api enables UAV movement, telemetry and basic command execution such as RTL and TAKEOFF through HTTP requests, facilitating remote controlled flights, both programmatically and manually. In addition to that, Uav_api supports protocol execution for autonomous flights, oferring the same interface as gradysim-nextgen simulator. At last but not least, Uav_control can be used for simulations based on Ardupilot's SITL. 
 
 # Installation
 ## Prerequisites
@@ -14,8 +14,8 @@ To install required python packages run the command bellow from the root folder 
 
   `pip3 install -r requirements.txt`
 # Executing a Real flight
-## Starting Uav_control
-To start the uav_control API, run the following command:
+## Starting Uav_api
+To start the server, run the following command:
 
   `python3 uav_api.py --port [port for API] --uav_connection [ardupilot_connection] --connection_type [udpin or updout] --sysid [sysid for ardupilot]`
   
@@ -46,13 +46,13 @@ Once inside the web page, scroll to telemetry router and execute the `telemetry/
 If everything is fine, the answer should look like this.
 ![image](https://github.com/user-attachments/assets/47e7c802-6411-4864-9f1c-280327c4303c)
 
-And that's it! You can start consuming the Uav_control API
+And that's it! You can start sending HTTP requests to Uav_api
 # Executing a Simulated flight
-## Starting Uav_control
+## Starting Uav_api
 To instantiate the API, run the script `uav_api.py` through the following command:
   
   `python3 uav_api.py --simulated true`
-This command initiates both the SITL, and the Uav_control API. The connection addres of the SITL instance is `127.0.0.1:17171` and the api is hosted at localhost:8000 by default but both of this parameters can be modified by arguments.
+This command initiates both the SITL, and the Uav_api API. The connection addres of the SITL instance is `127.0.0.1:17171` and the api is hosted at localhost:8000 by default but both of this parameters can be modified by arguments.
 
 ## Testing and feedback
 To manually test the api access the auto-generated swagger endpoint at `http://localhost:8000/docs`. 
