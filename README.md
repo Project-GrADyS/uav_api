@@ -38,7 +38,7 @@ To get better insight on the arguments for `uav_api.py` run the command bellow:
   `python3 uav_api --help`
 ## Testing API
 To verify the initialization of the API go to the endpoint `localhost:[your_port]/docs`.
-![image](https://github.com/user-attachments/assets/6d1f9b6c-f69c-4381-98f0-7adec7311c15)
+<img width="1919" height="1018" alt="image" src="https://github.com/user-attachments/assets/6ef0d0b1-4dd7-4049-b16e-f3b509ab1b94" />
 
 Once inside the web page, scroll to telemetry router and execute the `telemetry/general` endpoint.
 ![image](https://github.com/user-attachments/assets/4d1922a7-91c3-4873-81cc-5db9961a2e18)
@@ -57,7 +57,7 @@ This command initiates both the SITL, and the Uav_api API. The connection addres
 ## Testing and feedback
 To manually test the api access the auto-generated swagger endpoint at `http://localhost:8000/docs`. 
 
-![image](https://github.com/user-attachments/assets/6d1f9b6c-f69c-4381-98f0-7adec7311c15)
+<img width="1919" height="1018" alt="image" src="https://github.com/user-attachments/assets/09b3833b-4e33-4797-b1aa-6e0fbcc9e601" />
 
 To get visual feedback of drone position and telemetry use Mission Planner, or any other ground station software of your preference, and connect to UDP port `15630` (for wsl users this may not work, check the parameters section for uav_api.py and search for gs_connection for more).
 
