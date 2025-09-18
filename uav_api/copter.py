@@ -1807,9 +1807,9 @@ Also, ignores heartbeats not from our target system"""
             mavutil.mavlink.MAV_PARAM_TYPE_REAL32
         )
         # Optionally, wait for confirmation
-        start_time = time.time()
-        while start_time + timeout > time.time():
-            message = self.mav.recv_match(type='PARAM_VALUE', blocking=True)
-            if message.param_id.decode('utf-8').strip('\x00') == "SIM_SPEEDUP":
-                print(f"Set {"SIM_SPEEDUP":} to {message.param_value}")
-                break
+        # start_time = time.time()
+        # while start_time + timeout > time.time():
+        #     message = self.mav.recv_match(type='PARAM_VALUE', blocking=True)
+        #     if message.param_id.decode('utf-8').strip('\x00') == "SIM_SPEEDUP":
+        #         print(f"Set {"SIM_SPEEDUP":} to {message.param_value}")
+        #         break
