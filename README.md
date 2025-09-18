@@ -1,14 +1,14 @@
 # Uav_api
-This is the repository for Uav_api, an API for UAV autonomous flights. The Uav_api enables UAV movement, telemetry and basic command execution such as RTL and TAKEOFF through HTTP requests, facilitating remote controlled flights, both programmatically and manually. In addition to that, Uav_api supports protocol execution for autonomous flights, oferring the same interface as gradysim-nextgen simulator. At last but not least, Uav_control can be used for simulations based on Ardupilot's SITL. 
+This is the repository for Uav_api, an API for UAV autonomous flights. The Uav_api enables UAV movement, telemetry and basic command execution such as RTL and TAKEOFF through HTTP requests, facilitating remote controlled flights, both programmatically and manually. In addition to that, Uav_api supports protocol execution for autonomous flights, oferring the same interface as gradysim-nextgen simulator. At last but not least, Uav_api can be used for simulations based on Ardupilot's SITL. 
 
 # Installation
 ## Prerequisites
 Python 3.10 is required
 If simulated flights are intended, installing Ardupilot's codebase is necessary. To do that follow the instructions at https://ardupilot.org/dev/docs/where-to-get-the-code.html (Don't forget to build the environment after cloning). In addition to that, following the steps for running the SITL is also required, which are stated at https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
 ## Cloning the repository
-To install Uav_control simply clone this repository.
+To install Uav_api simply clone this repository.
   
-  `git clone git@github.com:Project-GrADyS/uav_control.git`
+  `git clone git@github.com:Project-GrADyS/uav_api.git`
 ## Install required packages
 To install required python packages run the command bellow from the root folder of the repository:
 
