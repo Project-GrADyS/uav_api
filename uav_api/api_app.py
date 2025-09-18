@@ -28,8 +28,8 @@ metadata = [
 
 description = f"""
 ## COPTER INFORMATION
-* SYSID = **{10}**
-* CONNECTION_STRING = **{'aaa'}**
+* SYSID = **{args.sysid}**
+* CONNECTION_STRING = **{args.uav_connection}**
 """
 
 @asynccontextmanager
@@ -50,8 +50,8 @@ async def lifespan(app: FastAPI):
         os.system("pkill xterm")
 
 app = FastAPI(
-    title="UavControl API",
-    summary=f"API designed to simplify Copter control with Ardupilot",
+    title="Uav_API",
+    summary=f"API designed to simplify Copter control for Ardupilot UAVs (for now only QuadCopter is supported).",
     description=description,
     version="0.0.1",
     contact={
