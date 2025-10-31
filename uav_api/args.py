@@ -3,6 +3,7 @@ import configparser
 import json
 import argparse
 import os
+import ast
 
 def namespace_to_str(namespace: argparse.Namespace) -> str:
     """Convert argparse.Namespace to a JSON string."""
@@ -40,13 +41,19 @@ def parse_args(raw_args=None):
         #parse_config_file(args.config)
         config = configparser.ConfigParser()
         config.read(args.config)
+
+        if "simulated" in config.sections():
+            setattr(args, "simulated", True)
+
         for section in config.sections():
             for key, value in config.items(section):
                 if hasattr(args, key):
+                    if value[0] == "[":
+                        value = value.strip("[]").split(",")
+                        value = [v.strip() for v in value]
                     setattr(args, key, value)
                 else:
                     print(f"Warning: {key} not found in args")
-        print(config.sections())
     return args
     
 # MODE PARSER
