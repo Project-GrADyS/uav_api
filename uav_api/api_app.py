@@ -55,10 +55,6 @@ app = FastAPI(
     summary=f"API designed to simplify Copter control for Ardupilot UAVs (for now only QuadCopter is supported).",
     description=description,
     version="0.0.2",
-    contact={
-        "name": "Francisco Fleury",
-        "email": "franmeifleury@gmail.com",
-    },
     openapi_tags=metadata,
     lifespan=lifespan
 )
