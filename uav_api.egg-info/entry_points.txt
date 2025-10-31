@@ -1,2 +1,0 @@
-[console_scripts]
-uav-api = uav_api.run_api:main
