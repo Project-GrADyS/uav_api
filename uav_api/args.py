@@ -33,9 +33,7 @@ def parse_args(raw_args=None):
     parse_mode(parser)
     parse_api(parser)
     parse_logs(parser)
-    partial_args, _ = parser.parse_known_args(raw_args)
-    if partial_args.simulated:
-        parse_simulated(parser)
+    parse_simulated(parser)
     args = parser.parse_args(raw_args)
 
     if args.config:
@@ -117,7 +115,7 @@ def parse_simulated(simulated_parser):
     simulated_parser.add_argument(
         '--gs_connection',
         dest='gs_connection',
-        default=["172.26.176.1:15630", "172.31.16.1:15630", "172.23.192.1:15630"],
+        default=[],
         help="Address for GroundStation connection",
         nargs='*'
     )
@@ -133,7 +131,7 @@ def parse_simulated(simulated_parser):
     simulated_parser.add_argument(
         '--ardupilot_path',
         dest='ardupilot_path',
-        default='~/gradys/ardupilot',
+        default='~/ardupilot',
         help="Path for ardupilot repository"
     )
 
@@ -141,7 +139,7 @@ def parse_logs(logs_parser):
 
     # Defines which values are accepted as a LOGGER input.
     def valid_loggers_type(value):
-        valid_loggers = {'PROTOCOL', 'COPTER'}
+        valid_loggers = {'API', 'COPTER'}
         if not value in valid_loggers:
             raise argparse.ArgumentTypeError('Invalid value. Please choose one of the following: value1, value2, or both')
         return value
@@ -167,5 +165,6 @@ def parse_logs(logs_parser):
         dest="debug",
         default=[],
         type=valid_loggers_type,
-        help="Which loggers to apply debug level. Possible logger: COPTER, PROTOCOL and API."
+        help="Which loggers to apply debug level. Possible logger: COPTER, PROTOCOL and API.",
+        nargs="*"
     )

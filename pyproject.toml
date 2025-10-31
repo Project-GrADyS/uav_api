@@ -7,7 +7,7 @@ include = ["uav_api*"]
 
 [project]
 name = "uav_api"
-version = "0.0.2"
+version = "0.0.3"
 description = "Uav_api is a python package that provides a HTTP interface for MAVLink commands for ardupilot vehicles"
 keywords = ["mavlink", "http", "simulation", "gradys", "LAC", "PUC", "drone", "ardupilot"]
 authors = [
@@ -32,3 +32,6 @@ dependencies = [
 
 [project.urls]
 "Homepage" = "https://github.com/Project-GrADyS/uav_api"
+
+[project.scripts]
+uav-api = "uav_api.run_api:main"
