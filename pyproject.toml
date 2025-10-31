@@ -21,13 +21,15 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 requires-python = ">=3.8"
+
 dependencies = [
     'fastapi>=0.115.4',
     'MAVProxy>=1.8.71',
     'pydantic>=2.9.2',
     'pymavlink>=2.4.41',
-    'Requests>=2.32.3',
     'uvicorn>=0.32.0',
+    'future>=1.0.0',
+    'pexpect>=4.9.0'
 ]
 
 [project.urls]
