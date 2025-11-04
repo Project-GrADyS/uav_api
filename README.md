@@ -1,44 +1,87 @@
 # Uav_api
-This is the repository for Uav_api, an API for UAV autonomous flights. The Uav_api enables UAV movement, telemetry and basic command execution such as RTL and TAKEOFF through HTTP requests, facilitating remote controlled flights, both programmatically and manually. In addition to that, Uav_api supports protocol execution for autonomous flights, oferring the same interface as gradysim-nextgen simulator. At last but not least, Uav_api can be used for simulations based on Ardupilot's SITL. 
+This is the repository for Uav_api, an API for UAV autonomous flights. The Uav_api enables UAV movement, telemetry and basic command execution such as RTL and TAKEOFF through HTTP requests, facilitating remote controlled flights, both programmatically and manually. In addition to that, Uav_api supports protocol execution for autonomous flights, oferring the same interface as gradysim-nextgen simulator. At last but not least, Uav_api can be used for simulations based on Ardupilot's SITL.
 
 # Installation
 ## Prerequisites
 Python 3.10 is required
 If simulated flights are intended, installing Ardupilot's codebase is necessary. To do that follow the instructions at https://ardupilot.org/dev/docs/where-to-get-the-code.html (Don't forget to build the environment after cloning). In addition to that, following the steps for running the SITL is also required, which are stated at https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
-## Cloning the repository
-To install Uav_api simply clone this repository.
-  
-  `git clone git@github.com:Project-GrADyS/uav_api.git`
-## Install required packages
-To install required python packages run the command bellow from the root folder of the repository:
 
-  `pip3 install -r requirements.txt`
-# Executing a Real flight
+## Installing with pip (recommended)
+To install uav-api python package run the following command:
+
+  `pip install uav-api`
+
+This will install the package in your current environment.
+After the installation is over, restart you terminal instance and you are ready to go!
+
+## Using git repository
+It is also possible to install a local development version of uav_api where you can make changes.
+Start by cloning the repository
+
+  `git clone https://github.com/Project-GrADyS/uav_api`
+
+Then, inside of the cloned repository, run the command:
+
+  `pip install -e .`
+
+Now close and re-open your terminal instance and you are ready to go!
+
+# Executing the api in a real drone
 ## Starting Uav_api
 To start the server, run the following command:
 
-  `python3 uav_api.py --port [port for API] --uav_connection [ardupilot_connection] --connection_type [udpin or updout] --sysid [sysid for ardupilot]`
-  
-Alternatively, you can use a configuration file in the .ini format.
+  `uav-api --port [port for API] --uav_connection [ardupilot_connection] --connection_type [udpin or updout] --sysid [sysid for ardupilot]`
 
-This file is located at `flight_examples/config.ini`
+Alternatively, you can use a configuration file in the following .ini format.
 ```
-[API]
-port = 8020
+[api]
+port = 8000
 uav_connection = 127.0.0.1:17171
 connection_type = udpin
-sysid = 12
+sysid = 1
 ```
 And run the command:
 
-  `python3 uav_api.py --config flight_examples/config.ini`
+  `uav-api --config /path_to_config`
 
-To get better insight on the arguments for `uav_api.py` run the command bellow:
+To see more arguments options and to get better insight on the arguments for `uav-api` run the command bellow:
 
-  `python3 uav_api --help`
-## Testing API
+  `uav-api --help`
+
+And that's it! You can start sending HTTP requests to Uav_api
+
+# Executing a Simulated flight
+Executing a simulated flight with UAV API is almost exactly the same as in a real drone, the only difference is that simulated flights take a few more arguments.
+## Starting Uav_api and SITL at the same time
+To instantiate the API and Ardupilot's SITL, run the following command:
+
+  `uav-api --simulated true --ardupilot_path [path to ardupilot repository] --speedup [speedup factor for SITL] --gs_connection [ip:port telemetry routing for groundstation softwares] --port [port for API] --uav_connection [ardupilot_connection] --connection_type [udpin or updout] --sysid [sysid for ardupilot]`
+
+This command initiates both the SITL, and the Uav_api API. The connection addres of the SITL instance is the one set in `uav_connection` argument and the speedup factor of the simulation is set to the value of the `speedup` argument.
+
+It is also possible to start simulated flights through configuration files.
+
+```
+[api]
+port=8000
+uav_connection=127.0.0.1:17171
+connection_type=udpin
+sysid=1
+
+[simulated]
+ardupilot_path=~/ardupilot
+gs_connection=[172.26.176.1:15630]
+speedup=1
+```
+
+With the command:
+
+`uav-api --config /path_to_config`
+
+# Testing and feedback
+## Testing API initialization
 To verify the initialization of the API go to the endpoint `localhost:[your_port]/docs`.
-<img width="1919" height="1018" alt="image" src="https://github.com/user-attachments/assets/6ef0d0b1-4dd7-4049-b16e-f3b509ab1b94" />
+<img src="https://github.com/user-attachments/assets/6ef0d0b1-4dd7-4049-b16e-f3b509ab1b94" />
 
 Once inside the web page, scroll to telemetry router and execute the `telemetry/general` endpoint.
 ![image](https://github.com/user-attachments/assets/4d1922a7-91c3-4873-81cc-5db9961a2e18)
@@ -46,28 +89,24 @@ Once inside the web page, scroll to telemetry router and execute the `telemetry/
 If everything is fine, the answer should look like this.
 ![image](https://github.com/user-attachments/assets/47e7c802-6411-4864-9f1c-280327c4303c)
 
-And that's it! You can start sending HTTP requests to Uav_api
-# Executing a Simulated flight
-## Starting Uav_api
-To instantiate the API, run the script `uav_api.py` through the following command:
-  
-  `python3 uav_api.py --simulated true`
-This command initiates both the SITL, and the Uav_api API. The connection addres of the SITL instance is `127.0.0.1:17171` and the api is hosted at localhost:8000 by default but both of this parameters can be modified by arguments.
-
-## Testing and feedback
-To manually test the api access the auto-generated swagger endpoint at `http://localhost:8000/docs`. 
-
-<img width="1919" height="1018" alt="image" src="https://github.com/user-attachments/assets/09b3833b-4e33-4797-b1aa-6e0fbcc9e601" />
-
-To get visual feedback of drone position and telemetry use Mission Planner, or any other ground station software of your preference, and connect to UDP port `15630` (for wsl users this may not work, check the parameters section for uav_api.py and search for gs_connection for more).
+## Visual feedback with Mission Planner
+To get visual feedback of drone position and telemetry use Mission Planner, or any other ground station software of your preference, and connect to UDP port specified in `gs_connection` parameter.
 
 ![image](https://github.com/user-attachments/assets/b7928581-89c6-46c0-9f02-3bd8edd30570)
 
 # Flying through scripts
-One of the perks of using Uav_control is simplifying UAV flights coordinated by scripts. Here are some examples:
+One of the perks of using UAV API is being aple to quickly write scripts that control drone movement. Here are some examples
+## Running examples
+To run the following examples run the following command inside of the `flight_examples` directory:
+
+  `uav-api --config ./uav_1.ini`
+
+Note that this configuration file contains default values for parameters, change the values such that it matches your envinronment. You can also use your own configuration file or start the api through arguments.
+
+Once the api is up and running, run one of the examples bellow in a new terminal instance.
 
 ## Simple Takeoff and Landing
-This file is located at `flight_examples/takeoff_land.py`
+This file is located at `uav_api/flight_examples/takeoff_land.py`
 ```python
 import requests
 base_url = "http://localhost:8000"
@@ -94,7 +133,6 @@ if land_result.status_code != 200:
     exit()
 print("Vehicle landed.")
 ```
-
 
 ## NED Square
 In this example the uav will move following a square with 100 meters side. This file is located at `flight_examples/ned_square`.
@@ -223,7 +261,7 @@ print("Vehicle landed at launch.")
 
 ## Follower
 In this example one UAV will perform a square flight (shown previously) while another UAV follows it by consuming the leader API.
-To run this example start 2 different uav-api process with different ports and sysid. Now start the square script using the first UAV port number, then start the follower script (located at flight_examples/follower.py) with the port number of the second UAV.
+To run this example start 2 different uav-api process with different ports and sysid. Now start the square script using the first UAV port number, then start the follower script (located at `flight_examples/follower.py`) with the port number of the second UAV.
 ```python
 import requests
 from time import sleep, time
