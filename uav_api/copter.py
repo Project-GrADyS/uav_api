@@ -1729,6 +1729,13 @@ Also, ignores heartbeats not from our target system"""
                 return last_msg
             last_msg = msg
         
+    def get_last_message(self, msg_type):
+        message = None
+        timestamp = None
+        message = self.mav.messages[msg_type]
+        timestamp = self.mav.time_since(msg_type)
+        self.progress("Message %s received (%s): %s" % (msg_type, timestamp, message))
+        return (message, timestamp)
 
     def get_raw_status_message(self, timeout=5):
         sys_msg = self.get_message("SYS_STATUS", timeout=timeout)
@@ -1779,15 +1786,15 @@ Also, ignores heartbeats not from our target system"""
         }
     
     def get_gps_info(self, timeout=5):
-        gps_msg = self.get_message("GLOBAL_POSITION_INT", timeout=timeout)
+        gps_msg = self.get_last_message("GLOBAL_POSITION_INT")
         return gps_msg
     
     def get_raw_gps(self, timeout=5):
-        gps_raw = self.get_message("GPS_RAW_INT", timeout=timeout)
+        gps_raw = self.get_last_message("GPS_RAW_INT")
         return gps_raw
     
     def get_ned_info(self, timeout=5):
-        ned_msg = self.get_message("LOCAL_POSITION_NED", timeout=timeout)
+        ned_msg = self.get_last_message("LOCAL_POSITION_NED")
         return ned_msg
 
     def get_general_info(self, timeout=5):
