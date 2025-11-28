@@ -12,7 +12,6 @@ movement_router = APIRouter(
 @movement_router.post("/go_to_gps/", tags=["movement"], summary="Moves the copter to specified GPS position")
 def go_to_gps(pos: GPS_pos, uav: Copter = Depends(get_copter_instance)):
     try:
-        uav.change_mode("GUIDED")
         uav.go_to_gps(pos.lat, pos.long, pos.alt)
         #uav.ensure_moving()
     except Exception as e:
@@ -22,7 +21,6 @@ def go_to_gps(pos: GPS_pos, uav: Copter = Depends(get_copter_instance)):
 @movement_router.post("/go_to_gps_wait", tags=["movement"], summary="Moves and waits for the copter to get to specified GPS position")
 def go_to_gps_wait(pos: GPS_pos, uav: Copter = Depends(get_copter_instance)):
     try:
-        uav.change_mode("GUIDED")
         uav.go_to_gps(pos.lat, pos.long, pos.alt)
         #uav.ensure_moving()
         target_loc = uav.mav_location(pos.lat, pos.long, pos.alt)
@@ -34,7 +32,6 @@ def go_to_gps_wait(pos: GPS_pos, uav: Copter = Depends(get_copter_instance)):
 @movement_router.post("/go_to_ned", tags=["movement"], summary="Moves to specified NED position")
 def go_to_ned(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
     try:
-        uav.change_mode("GUIDED")
         uav.go_to_ned(pos.x, pos.y, pos.z) 
         #uav.ensure_moving()
     except Exception as e:
@@ -44,7 +41,6 @@ def go_to_ned(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
 @movement_router.post("/go_to_ned_wait", tags=["movement"], summary="Moves and waits for the copter to get to specified NED position")
 def go_to_ned_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
     try:
-        uav.change_mode("GUIDED")
         uav.go_to_ned(pos.x, pos.y, pos.z)
         #uav.ensure_moving()
         uav.wait_ned_position(pos)
@@ -56,7 +52,6 @@ def go_to_ned_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
 @movement_router.post("/drive", tags=["movement"], summary="Drives copter the specified amount in meters")
 def drive(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
     try:
-        uav.change_mode("GUIDED")
         pos.z = -pos.z # from NEU to NED
         uav.drive_ned(pos.x, pos.y, pos.z)
         #uav.ensure_moving()
@@ -67,7 +62,6 @@ def drive(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
 @movement_router.post("/drive_wait", tags=["movement"], summary="Drives and waits copter the specified amount in meters")
 def drive_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
     try:
-        uav.change_mode("GUIDED")
         pos.z = -pos.z # from NEU to NED
         current_pos = uav.get_ned_position()
         uav.drive_ned(pos.x, pos.y, pos.z)
