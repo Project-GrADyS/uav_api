@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
         ardupilot_logs = os.path.join(home_dir, "uav_api_logs", "ardupilot_logs")
         sitl_command = f"xterm -e {args.ardupilot_path}/Tools/autotest/sim_vehicle.py -v ArduCopter -I {args.sysid} --sysid {args.sysid} -N -L {args.location} --speedup {args.speedup} {out_str} --use-dir={ardupilot_logs} &"
         os.system(sitl_command)
-    get_copter_instance(args.sysid, f"{args.connection_type}:{args.uav_connection}")
+    get_copter_instance(args.sysid, f"{args.uav_connection}")
     yield
     # Close SITL
     if args.simulated:
