@@ -1820,3 +1820,22 @@ Also, ignores heartbeats not from our target system"""
         #     if message.param_id.decode('utf-8').strip('\x00') == "SIM_SPEEDUP":
         #         print(f"Set {"SIM_SPEEDUP":} to {message.param_value}")
         #         break
+
+    def request_home_message(self, message_id, timeout=5):
+        """Request a specific message from the vehicle."""
+        self.progress("Requesting message ID %s" % (message_id))
+        self.mav.mav.command_long_send(
+        self.target_system,    # Target system (autopilot)
+        self.target_component, # Target component (autopilot)
+        mavutil.mavlink.MAV_CMD_GET_HOME_POSITION, # Command ID
+        0,                       # Confirmation (0 for first transmission)
+        0, # param1: Message ID to request
+        0, 0, 0, 0, 0, 0          # Unused parameters
+        )
+    
+    def get_home_position(self, timeout=10):
+        """Get home position as sent by the vehicle."""
+        MESSAGE_ID_HOME_POSITION = 242
+        self.request_home_message(self, MESSAGE_ID_HOME_POSITION)
+        home_message = self.get_message("HOME_POSITION", timeout=timeout)
+        return home_message.to_dict()
