@@ -136,3 +136,20 @@ def error_info(uav: Copter = Depends(get_copter_instance)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GET_ERROR_INFO FAIL: {e}")
     return {"result": "success", "info": info}
+
+@telemetry_router.get("/home_info", tags=["telemetry"], summary="Returns information about HOME position, which represents the point (0,0,0) in static NED coordinate frame")
+def home_info(uav: Copter = Depends(get_copter_instance)):
+    try:
+        info = uav.get_home_position()
+        res_obj = {
+            "result": "Success", 
+            "lat": info["latitude"] / 1.0e7, # to degrees
+            "lon": info["longitude"] / 1.0e7, # to degrees
+            "altitude": info["altitude"] / 1000, # to meters
+            "x": info["x"],
+            "y": info["y"],
+            "z": info["z"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GET_HOME_INFO FAIL: {e}")
+    return res_obj
