@@ -87,3 +87,11 @@ def set_sim_speedup(sim_factor: float, uav: Copter = Depends(get_copter_instance
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"CHANGE_SIM_SPEEDUP FAIL: {e}")
     return {"result": f"Simulation speedup set to {sim_factor}x"}
+
+@command_router.get("/set_home", tags=["command"], description="Changes the copter HOME location")
+def set_home(uav: Copter = Depends(get_copter_instance)):
+    try:
+        uav.set_home()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SET_HOME_LOCATION FAIL: {e}")
+    return {"result": f"Home location set successfully!"}

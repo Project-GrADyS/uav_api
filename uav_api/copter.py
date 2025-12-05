@@ -1825,12 +1825,12 @@ Also, ignores heartbeats not from our target system"""
         """Request a specific message from the vehicle."""
         self.progress("Requesting message ID %s" % (message_id))
         self.mav.mav.command_long_send(
-        self.target_system,    # Target system (autopilot)
-        self.target_component, # Target component (autopilot)
-        mavutil.mavlink.MAV_CMD_GET_HOME_POSITION, # Command ID
-        0,                       # Confirmation (0 for first transmission)
-        0, # param1: Message ID to request
-        0, 0, 0, 0, 0, 0          # Unused parameters
+            self.target_system,    # Target system (autopilot)
+            self.target_component, # Target component (autopilot)
+            mavutil.mavlink.MAV_CMD_GET_HOME_POSITION, # Command ID
+            0,                       # Confirmation (0 for first transmission)
+            0, # param1: Message ID to request
+            0, 0, 0, 0, 0, 0          # Unused parameters
         )
     
     def get_home_position(self, timeout=10):
@@ -1839,3 +1839,8 @@ Also, ignores heartbeats not from our target system"""
         self.request_home_message(self, MESSAGE_ID_HOME_POSITION)
         home_message = self.get_message("HOME_POSITION", timeout=timeout)
         return home_message.to_dict()
+    
+    def set_home(self, timeout=10):
+        MAV_CMD_DO_SET_HOME = 179
+
+        self.run_cmd(MAV_CMD_DO_SET_HOME, 1, 0, 0, 0, 0, 0, 0, timeout=timeout)
