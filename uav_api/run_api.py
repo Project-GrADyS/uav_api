@@ -13,7 +13,8 @@ def run_with_args(raw_args=None):
         "--host", "0.0.0.0",
         "--port", str(args.port),
         "--log-level", "debug",
-        "--reload"
+        "--reload",
+        '--workers', str(args.n_runners)
     ])
 
     print("API process created.")

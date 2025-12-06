@@ -107,6 +107,14 @@ def parse_api(api_parser):
         help='Sysid for Copter'
     )
 
+    api_parser.add_argument(
+        '--n_runners',
+        dest='n_runners',
+        type=int,
+        default=1,
+        help='Number of parallel runners to be created'
+    )
+
 # SIMULATED PARSER
 def parse_simulated(simulated_parser):
 
