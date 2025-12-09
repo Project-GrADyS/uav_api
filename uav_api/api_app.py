@@ -1,4 +1,5 @@
 import os
+import asyncio
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
@@ -44,11 +45,24 @@ async def lifespan(app: FastAPI):
         ardupilot_logs = os.path.join(home_dir, "uav_api_logs", "ardupilot_logs")
         sitl_command = f"xterm -e {args.ardupilot_path}/Tools/autotest/sim_vehicle.py -v ArduCopter -I {args.sysid} --sysid {args.sysid} -N -L {args.location} --speedup {args.speedup} {out_str} --use-dir={ardupilot_logs} &"
         os.system(sitl_command)
-    get_copter_instance(args.sysid, args.uav_connection if args.connection_type == "usb" else f"{args.connection_type}:{args.uav_connection}")
+    copter = get_copter_instance(args.sysid, args.uav_connection if args.connection_type == "usb" else f"{args.connection_type}:{args.uav_connection}")
+    
+    # Starting task that will continuously drain MAVLink messages
+    drain_mav_loop = asyncio.create_task(copter.run_drain_mav_loop())
     yield
     # Close SITL
     if args.simulated:
+        print("Closing SITL...")
         os.system("pkill xterm")
+        print("SITL closed.")
+
+    # Cancelling Drain Mav Loop Task
+    print("Cancelling Drain MAVLink loop...")
+    drain_mav_loop.cancel()
+    try:
+        await drain_mav_loop
+    except asyncio.CancelledError:
+        print("Drain MAVLink loop has been cancelled.")
 
 app = FastAPI(
     title="Uav_API",

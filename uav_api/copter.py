@@ -5,6 +5,7 @@ import sys
 import time
 import datetime
 import logging
+import asyncio
 
 from pymavlink import mavwp
 from MAVProxy.modules.lib import mp_util
@@ -1735,7 +1736,7 @@ Also, ignores heartbeats not from our target system"""
         message = self.mav.messages[msg_type]
         timestamp = self.mav.time_since(msg_type)
         self.progress("Message %s received (%s): %s" % (msg_type, timestamp, message))
-        return (message, timestamp)
+        return message
 
     def get_raw_status_message(self, timeout=5):
         sys_msg = self.get_message("SYS_STATUS", timeout=timeout)
@@ -1767,7 +1768,7 @@ Also, ignores heartbeats not from our target system"""
         return s_data
     
     def get_battery_info(self, timeout=5):
-        sys_msg = self.get_message("SYS_STATUS", timeout=timeout)
+        sys_msg = self.get_last_message("SYS_STATUS")
 
         return {
             "voltage": sys_msg.voltage_battery,
@@ -1776,7 +1777,7 @@ Also, ignores heartbeats not from our target system"""
         }
     
     def get_error_info(self, timeout=5):
-        sys_msg = self.get_message("SYS_STATUS", timeout=timeout)
+        sys_msg = self.get_last_message("SYS_STATUS")
         autopilot_errors = [sys_msg.errors_count1, sys_msg.errors_count2, sys_msg.errors_count3, sys_msg.errors_count4]
         autopilot_errors = [err for err in autopilot_errors if err != 0]
         return {
@@ -1798,11 +1799,11 @@ Also, ignores heartbeats not from our target system"""
         return ned_msg
 
     def get_general_info(self, timeout=5):
-        info_msg = self.get_message("VFR_HUD", timeout=timeout)
+        info_msg = self.get_last_message("VFR_HUD")
         return info_msg
 
     def get_compass_info(self, timeout=5):
-        compass_msg = self.get_message("MAG_CAL_REPORT", timeout=timeout)
+        compass_msg = self.get_last_message("MAG_CAL_REPORT")
         return compass_msg
     
     def set_sim_speedup(self, value, timeout=10):
@@ -1844,3 +1845,9 @@ Also, ignores heartbeats not from our target system"""
         MAV_CMD_DO_SET_HOME = 179
 
         self.run_cmd(MAV_CMD_DO_SET_HOME, 1, 0, 0, 0, 0, 0, 0, timeout=timeout)
+
+    async def run_drain_mav_loop(self, interval=0.1):
+        """Asynchronous loop to continuously drain MAVLink messages."""
+        while True:
+            self.drain_mav()
+            await asyncio.sleep(interval)
