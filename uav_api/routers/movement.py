@@ -13,7 +13,6 @@ movement_router = APIRouter(
 def go_to_gps(pos: GPS_pos, uav: Copter = Depends(get_copter_instance)):
     try:
         uav.go_to_gps(pos.lat, pos.long, pos.alt)
-        #uav.ensure_moving()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GO_TO FAIL: {e}")
     return {"result": f"Going to coord ({pos.lat}, {pos.long}, {pos.alt})"}
@@ -22,7 +21,6 @@ def go_to_gps(pos: GPS_pos, uav: Copter = Depends(get_copter_instance)):
 def go_to_gps_wait(pos: GPS_pos, uav: Copter = Depends(get_copter_instance)):
     try:
         uav.go_to_gps(pos.lat, pos.long, pos.alt)
-        #uav.ensure_moving()
         target_loc = uav.mav_location(pos.lat, pos.long, pos.alt)
         uav.wait_location(target_loc, timeout=60)
     except Exception as e:
@@ -33,7 +31,6 @@ def go_to_gps_wait(pos: GPS_pos, uav: Copter = Depends(get_copter_instance)):
 def go_to_ned(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
     try:
         uav.go_to_ned(pos.x, pos.y, pos.z) 
-        #uav.ensure_moving()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GO_TO FAIL: {e}")
     return {"result": f"Going to NED coord ({pos.x}, {pos.y}, {pos.z})"}
@@ -42,7 +39,6 @@ def go_to_ned(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
 def go_to_ned_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
     try:
         uav.go_to_ned(pos.x, pos.y, pos.z)
-        #uav.ensure_moving()
         uav.wait_ned_position(pos)
 
     except Exception as e:
@@ -52,9 +48,7 @@ def go_to_ned_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
 @movement_router.post("/drive", tags=["movement"], summary="Drives copter the specified amount in meters")
 def drive(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
     try:
-        pos.z = -pos.z # from NEU to NED
         uav.drive_ned(pos.x, pos.y, pos.z)
-        #uav.ensure_moving()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DRIVE FAIL: {e}")
     return {"result": "Copter is driving"}
@@ -62,10 +56,8 @@ def drive(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
 @movement_router.post("/drive_wait", tags=["movement"], summary="Drives and waits copter the specified amount in meters")
 def drive_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance)):
     try:
-        pos.z = -pos.z # from NEU to NED
         current_pos = uav.get_ned_position()
         uav.drive_ned(pos.x, pos.y, pos.z)
-        #uav.ensure_moving()
         target_pos = Local_pos(x=current_pos.x + pos.x, y=current_pos.y + pos.y, z=current_pos.z + pos.z)
         uav.wait_ned_position(target_pos)
     except Exception as e:
