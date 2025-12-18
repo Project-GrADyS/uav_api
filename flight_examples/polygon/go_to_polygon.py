@@ -6,25 +6,17 @@ base_url = "http://localhost:8000"
 
 SLEEP_TIME = 5
 
-def make_poligon_trajectory(r, l):
-    vectors = []
-    for n in range(l):
-        if n == 0:
-            vector = {
-                "x": 0,
-                "y": 0,
-                "z": -1
-            }
-        else:
-            vector = {
-                "x": round(r*math.sin(n*2*math.pi/l) - r*math.sin((n-1)*2*math.pi/l)),
-                "y": 0,
-                "z": -(round(r*math.cos(n*2*math.pi/l) - r*math.cos((n-1)*2*math.pi/l)))
-            }
-        print(f"poligon vector {n}: {vector}")
-        vectors.append(vector)
-
-    return(vectors)
+def make_polygon_points(r, s, offset):
+    points = []
+    for v in range(s):
+        point = {
+            "x": r*math.sin(v*2*math.pi/s) + offset["x"],
+            "y": offset["y"],
+            "z": -(r*math.cos(v*2*math.pi/s)) + offset["z"]
+        }
+        print(f"polygon point {v}: {point}")
+        points.append(point)
+    return(points)
 
 # Get the user's arguments
 parser = argparse.ArgumentParser()
@@ -87,21 +79,20 @@ if abs(center_pos["z"]-initial_pos["z"]) >= args.height+2 or abs(center_pos["z"]
         print("Vehicle landed.")
         exit()
 
-poligon_list = args.sides
-for l in poligon_list:
-    print(f"\n ---Poligon {l}---------------------------------- \n")
+polygon_list = args.sides
+for s in polygon_list:
+    print(f"\n ---polygon {s}---------------------------------- \n")
 
-    # For each polygon gets the NED trajectory vectors to the vertices
-    poligon_trajectory = make_poligon_trajectory(args.radius, l)
+    # For each polygon gets the NED coordinates of the vertices
+    polygon_points = make_polygon_points(args.radius, s, center_pos)
         
-    # Moving
-    for vector in poligon_trajectory:
-        # For each vertex moves the vehicle along its trajectory using drive_wait
-        vector_result = requests.post(f"{base_url}/movement/drive_wait", json=vector)
-        if vector_result.status_code != 200:
-            print(f"Drive_wait command fail. status_code={vector_result.status_code} vector={vector}")
+    for point in polygon_points:
+        # For each vertex moves the vehicle to its coordinate using go_to_ned_wait
+        point_result = requests.post(f"{base_url}/movement/go_to_ned_wait", json=point)
+        if point_result.status_code != 200:
+            print(f"Go_to_ned_wait command fail. status_code={point_result.status_code} point={point}")
             exit()
-        print(f"\nTrajectory vector: {vector})")
+        print(f"\nGo to point: {point})")
 
         #sleep ensures the vehicle has time to reach its desired position
         sleep(SLEEP_TIME)

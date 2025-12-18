@@ -320,10 +320,10 @@ if rtl_result.status_code != 200:
 print("Landed at launch")
 ```
 
-## Make poligon with Go To
+## Make polygon with Go To
 
 This example raises the drone to a height defined by the user and then, using the endpoint `go_to_ned_wait`, takes the drone to the vertices of regular polygons also to be defined by the user. These polygons have their center located at the point where the drone was raised and are always made vertically. Whenever a polygon is finished, the drone returns to the center before starting the next one.
-The algorithm that maps the polygon points is found in the `make_poligon_points` function and works by inscribing a polygon with `s` vertices inside a circle of radius `r` and the NED coordinates of the center defined as `offset`. Since the polygon is inscribed, we know that its vertices are located on the perimeter of the circle, and since we also know that the polygon is regular, the vertices are equidistant, so we can find the angular distance of each vertex from $\frac{2\pi}{n}$. Now, numbering each vertex `v` from $v_{0}=0$ to $v_{n}=s-1$, we can find the angle of each one using the function:  
+The algorithm that maps the polygon points is found in the `make_polygon_points` function and works by inscribing a polygon with `s` vertices inside a circle of radius `r` and the NED coordinates of the center defined as `offset`. Since the polygon is inscribed, we know that its vertices are located on the perimeter of the circle, and since we also know that the polygon is regular, the vertices are equidistant, so we can find the angular distance of each vertex from $\frac{2\pi}{n}$. Now, numbering each vertex `v` from $v_{0}=0$ to $v_{n}=s-1$, we can find the angle of each one using the function:  
 
 $$\theta_{i}=v_{i}\frac{2\pi}{n}$$
 
@@ -335,9 +335,9 @@ $$z_{i}=-\cos(v_{i}\frac{2\pi}{n})+z_{offset}$$
 
 To use the example, the user must define the desired polygons using the `--sides` parameter, inserting the number of vertices of the polygons, the radius of the circle in meters using the `--radius` parameter, and the height at which the center of the polygon should be in meters using the `--height` parameter. So, for example, if the user wants to create a triangle, a square, and a pentagon, inserted in a circle with a radius of 3 meters and a center 4 meters from the ground, the command should be:  
 
-`python go_to_poligon.py --sides 3 4 5 --radius 3 --height 4`  
+`python go_to_polygon.py --sides 3 4 5 --radius 3 --height 4`  
   
-This file is located at `flight_examples/go_to_poligon.py`.
+This file is located at `flight_examples/polygon/go_to_polygon.py`.
 
 ```python
 import requests
@@ -348,7 +348,7 @@ base_url = "http://localhost:8000"
 
 SLEEP_TIME = 5
 
-def make_poligon_points(r, s, offset):
+def make_polygon_points(r, s, offset):
     points = []
     for v in range(s):
         point = {
@@ -356,7 +356,7 @@ def make_poligon_points(r, s, offset):
             "y": offset["y"],
             "z": -(r*math.cos(v*2*math.pi/s)) + offset["z"]
         }
-        print(f"poligon point {v}: {point}")
+        print(f"polygon point {v}: {point}")
         points.append(point)
     return(points)
 
@@ -421,14 +421,14 @@ if abs(center_pos["z"]-initial_pos["z"]) >= args.height+2 or abs(center_pos["z"]
         print("Vehicle landed.")
         exit()
 
-poligon_list = args.sides
-for s in poligon_list:
-    print(f"\n ---Poligon {s}---------------------------------- \n")
+polygon_list = args.sides
+for s in polygon_list:
+    print(f"\n ---polygon {s}---------------------------------- \n")
 
     # For each polygon gets the NED coordinates of the vertices
-    poligon_points = make_poligon_points(args.radius, s, center_pos)
+    polygon_points = make_polygon_points(args.radius, s, center_pos)
         
-    for point in poligon_points:
+    for point in polygon_points:
         # For each vertex moves the vehicle to its coordinate using go_to_ned_wait
         point_result = requests.post(f"{base_url}/movement/go_to_ned_wait", json=point)
         if point_result.status_code != 200:
@@ -468,9 +468,9 @@ print("\nVehicle landed.")
 
 ```
 
-## Make poligon with Drive
+## Make polygon with Drive
 
-This example works the same way as the last one with one change, now we will use the `drive_wait` endpoint to take the drone to the vertices of the polygons. For this, the `make_poligon_points` function is replaced by the `make_poligon_trajectory` function. This new function also works by inscribing a polygon of `n` vertices inside a circle of radius `r`, but we don't need the NED coordinates of the circle's center. The same definition for the vertex angles will also be used: $\theta_{i}=v_{i}\frac{2\pi}{n}$.  
+This example works the same way as the last one with one change, now we will use the `drive_wait` endpoint to take the drone to the vertices of the polygons. For this, the `make_polygon_points` function is replaced by the `make_polygon_trajectory` function. This new function also works by inscribing a polygon of `n` vertices inside a circle of radius `r`, but we don't need the NED coordinates of the circle's center. The same definition for the vertex angles will also be used: $\theta_{i}=v_{i}\frac{2\pi}{n}$.  
 Instead of defining the coordinates of the vertices, we will define vectors, still in NED, that take the drone to the vertices. For the first step, the drone must be taken from the center of the polygon to the first vertex, knowing that $v_{0}=0$, the vector must be:
 
 $$x_{0}=\sin(v_{0}\frac{2\pi}{n})=0$$
@@ -483,7 +483,7 @@ $$x_{i}=\sin(v_{i}\frac{2\pi}{n}) - \sin(v_{i-1}\frac{2\pi}{n})$$
 $$y_{i}=0$$
 $$z_{i}=-(\cos(v_{i}\frac{2\pi}{n}) - \cos(v_{i-1}\frac{2\pi}{n}))$$
 
-To use this example, the user must define the same parameters `--sides`, `--radius`, and `--height` as demonstrated in the previous example. This file is located at `flight_examples/drive_poligon.py`.
+To use this example, the user must define the same parameters `--sides`, `--radius`, and `--height` as demonstrated in the previous example. This file is located at `flight_examples/polygon/drive_polygon.py`.
 
 ```python
 import requests
@@ -494,7 +494,7 @@ base_url = "http://localhost:8000"
 
 SLEEP_TIME = 5
 
-def make_poligon_trajectory(r, l):
+def make_polygon_trajectory(r, l):
     vectors = []
     for n in range(l):
         if n == 0:
@@ -509,7 +509,7 @@ def make_poligon_trajectory(r, l):
                 "y": 0,
                 "z": -(round(r*math.cos(n*2*math.pi/l) - r*math.cos((n-1)*2*math.pi/l)))
             }
-        print(f"poligon vector {n}: {vector}")
+        print(f"polygon vector {n}: {vector}")
         vectors.append(vector)
 
     return(vectors)
@@ -575,15 +575,15 @@ if abs(center_pos["z"]-initial_pos["z"]) >= args.height+2 or abs(center_pos["z"]
         print("Vehicle landed.")
         exit()
 
-poligon_list = args.sides
-for l in poligon_list:
-    print(f"\n ---Poligon {l}---------------------------------- \n")
+polygon_list = args.sides
+for l in polygon_list:
+    print(f"\n ---polygon {l}---------------------------------- \n")
 
     # For each polygon gets the NED trajectory vectors to the vertices
-    poligon_trajectory = make_poligon_trajectory(args.radius, l)
+    polygon_trajectory = make_polygon_trajectory(args.radius, l)
         
     # Moving
-    for vector in poligon_trajectory:
+    for vector in polygon_trajectory:
         # For each vertex moves the vehicle along its trajectory using drive_wait
         vector_result = requests.post(f"{base_url}/movement/drive_wait", json=vector)
         if vector_result.status_code != 200:
