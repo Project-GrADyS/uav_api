@@ -1599,7 +1599,7 @@ Also, ignores heartbeats not from our target system"""
                                 timeout=timeout
                             )
         
-    def drive_ned(self, north, east, down, timeout=60):
+    def drive_ned(self, north: float, east: float, down: float, timeout=60):
         self.mav.mav.set_position_target_local_ned_send(
                                                             0, # timestamp
                                                             self.target_system, # target system_id
@@ -1614,9 +1614,9 @@ Also, ignores heartbeats not from our target system"""
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE,
-                                                            int(north), # north offset to origin(home) (m)
-                                                            int(east), # east offset to origin(home) (m)
-                                                            int(down), # down offset to origin(home) (m)
+                                                            float(north), # north offset to origin(home) (m)
+                                                            float(east), # east offset to origin(home) (m)
+                                                            float(down), # down offset to origin(home) (m)
                                                             0, # x velocity (m/s)
                                                             0, # y velocity (m/s)
                                                             0, # z velocity (m/s)
