@@ -781,7 +781,7 @@ class Copter:
                                validator=lambda value2, target2: validator(value2, target2),
                                accuracy=(distance_max - distance_min), timeout=timeout, **kwargs)
 
-    def wait_and_maintain(self, value_name, target, current_value_getter, validator=None, accuracy=2.0, timeout=30,
+    def wait_and_maintain(self, value_name, target, current_value_getter, validator=None, accuracy=0.3, timeout=30,
                           **kwargs):
         tstart = time.time()
         achieving_duration_start = None
