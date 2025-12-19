@@ -319,3 +319,310 @@ if rtl_result.status_code != 200:
 
 print("Landed at launch")
 ```
+
+## Make polygon with Go To
+
+This example raises the drone to a height defined by the user and then, using the endpoint `go_to_ned_wait`, takes the drone to the vertices of regular polygons also to be defined by the user. These polygons have their center located at the point where the drone was raised and are always made vertically. Whenever a polygon is finished, the drone returns to the center before starting the next one.
+The algorithm that maps the polygon points is found in the `make_polygon_points` function and works by inscribing a polygon with `s` vertices inside a circle of radius `r` and the NED coordinates of the center defined as `offset`. Since the polygon is inscribed, we know that its vertices are located on the perimeter of the circle, and since we also know that the polygon is regular, the vertices are equidistant, so we can find the angular distance of each vertex from $\frac{2\pi}{n}$. Now, numbering each vertex `v` from $v_{0}=0$ to $v_{n}=s-1$, we can find the angle of each one using the function:  
+
+$$\theta_{i}=v_{i}\frac{2\pi}{n}$$
+
+Finally, knowing the angle of the vertices, the coordinates of the center, and knowing that the polygon must be drawn vertically, we can define the NED coordinates of the vertices as:  
+
+$$x_{i}=\sin(v_{i}\frac{2\pi}{n})+x_{offset}$$
+$$y_{i}=y_{offset}$$
+$$z_{i}=-\cos(v_{i}\frac{2\pi}{n})+z_{offset}$$
+
+To use the example, the user must define the desired polygons using the `--sides` parameter, inserting the number of vertices of the polygons, the radius of the circle in meters using the `--radius` parameter, and the height at which the center of the polygon should be in meters using the `--height` parameter. So, for example, if the user wants to create a triangle, a square, and a pentagon, inserted in a circle with a radius of 3 meters and a center 4 meters from the ground, the command should be:  
+
+`python go_to_polygon.py --sides 3 4 5 --radius 3 --height 4`  
+  
+This file is located at `flight_examples/polygon/go_to_polygon.py`.
+
+```python
+import requests
+import math
+from time import sleep
+import argparse
+base_url = "http://localhost:8000"
+
+SLEEP_TIME = 5
+
+def make_polygon_points(r, s, offset):
+    points = []
+    for v in range(s):
+        point = {
+            "x": r*math.sin(v*2*math.pi/s) + offset["x"],
+            "y": offset["y"],
+            "z": -(r*math.cos(v*2*math.pi/s)) + offset["z"]
+        }
+        print(f"polygon point {v}: {point}")
+        points.append(point)
+    return(points)
+
+# Get the user's arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('--sides', type=int, nargs='+', required=True)
+parser.add_argument('--radius', type=int, required=True)
+parser.add_argument('--height', type=int, required=True)
+args = parser.parse_args()
+
+# Ensures that the user defines a valid regular polygon
+if 1 in args.sides or 2 in args.sides:
+    print(f"Error: Polygon must have more than two sides!")
+    exit()
+
+# Failsafe: Ensure that the radius is smaller than the height of the perimeter's center
+if args.radius >= args.height:
+    print(f"Error: height vale must be higher then the radius value!")
+    exit()
+
+# Arming vehicle
+arm_result = requests.get(f"{base_url}/command/arm")
+if arm_result.status_code != 200:
+    print(f"Arm command fail. status_code={arm_result.status_code}")
+    exit()
+print("Vehicle armed.")
+
+# Get the NED coordinates, from telemetry, of the initial position with the vehicle still on the ground
+initial_result = requests.get(f"{base_url}/telemetry/ned")
+if initial_result.status_code != 200:
+    print(f"Ned telemetry fail. status_code={initial_result.status_code}")
+    exit()
+initial_pos = initial_result.json()["info"]["position"]
+print(f"Initial point: {initial_pos}")
+
+# Taking off
+params = {"alt": args.height}
+takeoff_result = requests.get(f"{base_url}/command/takeoff", params=params)
+if takeoff_result.status_code != 200:
+    print(f"Take off command fail. status_code={takeoff_result.status_code}")
+    exit()
+print("Vehicle took off")
+
+#sleep ensures the vehicle has time to reach its desired position
+sleep(SLEEP_TIME)
+
+# Get the NED coordinates, from telemetry, of the center of the polygons
+center_result = requests.get(f"{base_url}/telemetry/ned")
+if center_result.status_code != 200:
+    print(f"Ned telemetry fail. status_code={center_result.status_code}")
+    exit()
+center_pos = center_result.json()["info"]["position"]
+print(f"center point: {center_pos}")
+
+# Failsafe: Ensures the drone has reached the desired altitude, including a margin of error, if not it will land
+if abs(center_pos["z"]-initial_pos["z"]) >= args.height+2 or abs(center_pos["z"]-initial_pos["z"]) <= args.height-2:
+        print(f"Error: Vehicle did not reach the desired height.")
+        land_result = requests.get(f"{base_url}/command/land")
+        if land_result.status_code != 200:
+            print(f"Land command fail. status_code={land_result.status_code}")
+            exit()
+        print("Vehicle landed.")
+        exit()
+
+polygon_list = args.sides
+for s in polygon_list:
+    print(f"\n ---polygon {s}---------------------------------- \n")
+
+    # For each polygon gets the NED coordinates of the vertices
+    polygon_points = make_polygon_points(args.radius, s, center_pos)
+        
+    for point in polygon_points:
+        # For each vertex moves the vehicle to its coordinate using go_to_ned_wait
+        point_result = requests.post(f"{base_url}/movement/go_to_ned_wait", json=point)
+        if point_result.status_code != 200:
+            print(f"Go_to_ned_wait command fail. status_code={point_result.status_code} point={point}")
+            exit()
+        print(f"\nGo to point: {point})")
+
+        #sleep ensures the vehicle has time to reach its desired position
+        sleep(SLEEP_TIME)
+
+        # Get the NED coordinates, from telemetry, of the vertex for better user visualization and debugging
+        tele_ned_result = requests.get(f"{base_url}/telemetry/ned")
+        if tele_ned_result.status_code != 200:
+            print(f"Ned telemetry fail. status_code={tele_ned_result.status_code}")
+            exit()
+        tele_ned_pos = tele_ned_result.json()["info"]["position"]
+        print(f"Vehicle at {tele_ned_pos})")
+
+    # After completing the polygon, return the vehicle to the center using go_to_ned_wait
+    point_result = requests.post(f"{base_url}/movement/go_to_ned_wait", json=center_pos)
+    if point_result.status_code != 200:
+        print(f"Go_to_ned_wait command fail. status_code={point_result.status_code} point={center_pos}")
+        exit()
+    print(f"\nVehicle going back to the center")
+
+    #sleep ensures the vehicle has time to reach its desired position
+    sleep(SLEEP_TIME)
+    
+    print(f"Vehicle at the center")
+
+# Landing
+land_result = requests.get(f"{base_url}/command/land")
+if land_result.status_code != 200:
+    print(f"Land command fail. status_code={land_result.status_code}")
+    exit()
+print("\nVehicle landed.")
+
+```
+
+## Make polygon with Drive
+
+This example works the same way as the last one with one change, now we will use the `drive_wait` endpoint to take the drone to the vertices of the polygons. For this, the `make_polygon_points` function is replaced by the `make_polygon_trajectory` function. This new function also works by inscribing a polygon of `n` vertices inside a circle of radius `r`, but we don't need the NED coordinates of the circle's center. The same definition for the vertex angles will also be used: $\theta_{i}=v_{i}\frac{2\pi}{n}$.  
+Instead of defining the coordinates of the vertices, we will define vectors, still in NED, that take the drone to the vertices. For the first step, the drone must be taken from the center of the polygon to the first vertex, knowing that $v_{0}=0$, the vector must be:
+
+$$x_{0}=\sin(v_{0}\frac{2\pi}{n})=0$$
+$$y_{0}=0$$
+$$z_{0}=-\cos(v_{0}\frac{2\pi}{n})=-1$$
+
+For the following steps, since the drone is no longer at the center of the polygon, the vector that takes the drone from the center to the desired position must be subtracted by the vector that takes the drone from the center to its current position. This way, the trajectory vector of next points is obtained as follows:
+
+$$x_{i}=\sin(v_{i}\frac{2\pi}{n}) - \sin(v_{i-1}\frac{2\pi}{n})$$
+$$y_{i}=0$$
+$$z_{i}=-(\cos(v_{i}\frac{2\pi}{n}) - \cos(v_{i-1}\frac{2\pi}{n}))$$
+
+To use this example, the user must define the same parameters `--sides`, `--radius`, and `--height` as demonstrated in the previous example. This file is located at `flight_examples/polygon/drive_polygon.py`.
+
+```python
+import requests
+import math
+from time import sleep
+import argparse
+base_url = "http://localhost:8000"
+
+SLEEP_TIME = 5
+
+def make_polygon_trajectory(r, l):
+    vectors = []
+    for n in range(l):
+        if n == 0:
+            vector = {
+                "x": 0,
+                "y": 0,
+                "z": -1
+            }
+        else:
+            vector = {
+                "x": round(r*math.sin(n*2*math.pi/l) - r*math.sin((n-1)*2*math.pi/l)),
+                "y": 0,
+                "z": -(round(r*math.cos(n*2*math.pi/l) - r*math.cos((n-1)*2*math.pi/l)))
+            }
+        print(f"polygon vector {n}: {vector}")
+        vectors.append(vector)
+
+    return(vectors)
+
+# Get the user's arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('--sides', type=int, nargs='+', required=True)
+parser.add_argument('--radius', type=int, required=True)
+parser.add_argument('--height', type=int, required=True)
+args = parser.parse_args()
+
+# Ensures that the user defines a valid regular polygon
+if 1 in args.sides or 2 in args.sides:
+    print(f"Error: Polygon must have more than two sides!")
+    exit()
+
+# Failsafe: Ensure that the radius is smaller than the height of the perimeter's center
+if args.radius >= args.height:
+    print(f"Error: height vale must be higher then the radius value!")
+    exit()
+
+# Arming vehicle
+arm_result = requests.get(f"{base_url}/command/arm")
+if arm_result.status_code != 200:
+    print(f"Arm command fail. status_code={arm_result.status_code}")
+    exit()
+print("Vehicle armed.")
+
+# Get the NED coordinates, from telemetry, of the initial position with the vehicle still on the ground
+initial_result = requests.get(f"{base_url}/telemetry/ned")
+if initial_result.status_code != 200:
+    print(f"Ned telemetry fail. status_code={initial_result.status_code}")
+    exit()
+initial_pos = initial_result.json()["info"]["position"]
+print(f"Initial point: {initial_pos}")
+
+# Taking off
+params = {"alt": args.height}
+takeoff_result = requests.get(f"{base_url}/command/takeoff", params=params)
+if takeoff_result.status_code != 200:
+    print(f"Take off command fail. status_code={takeoff_result.status_code}")
+    exit()
+print("Vehicle took off")
+
+#sleep ensures the vehicle has time to reach its desired position
+sleep(SLEEP_TIME)
+
+# Get the NED coordinates, from telemetry, of the center of the polygons
+center_result = requests.get(f"{base_url}/telemetry/ned")
+if center_result.status_code != 200:
+    print(f"Ned telemetry fail. status_code={center_result.status_code}")
+    exit()
+center_pos = center_result.json()["info"]["position"]
+print(f"center point: {center_pos}")
+
+# Failsafe: Ensures the drone has reached the desired altitude, including a margin of error, if not it will land
+if abs(center_pos["z"]-initial_pos["z"]) >= args.height+2 or abs(center_pos["z"]-initial_pos["z"]) <= args.height-2:
+        print(f"Error: Vehicle did not reach the desired height.")
+        land_result = requests.get(f"{base_url}/command/land")
+        if land_result.status_code != 200:
+            print(f"Land command fail. status_code={land_result.status_code}")
+            exit()
+        print("Vehicle landed.")
+        exit()
+
+polygon_list = args.sides
+for l in polygon_list:
+    print(f"\n ---polygon {l}---------------------------------- \n")
+
+    # For each polygon gets the NED trajectory vectors to the vertices
+    polygon_trajectory = make_polygon_trajectory(args.radius, l)
+        
+    # Moving
+    for vector in polygon_trajectory:
+        # For each vertex moves the vehicle along its trajectory using drive_wait
+        vector_result = requests.post(f"{base_url}/movement/drive_wait", json=vector)
+        if vector_result.status_code != 200:
+            print(f"Drive_wait command fail. status_code={vector_result.status_code} vector={vector}")
+            exit()
+        print(f"\nTrajectory vector: {vector})")
+
+        #sleep ensures the vehicle has time to reach its desired position
+        sleep(SLEEP_TIME)
+
+        # Get the NED coordinates, from telemetry, of the vertex for better user visualization and debugging
+        tele_ned_result = requests.get(f"{base_url}/telemetry/ned")
+        if tele_ned_result.status_code != 200:
+            print(f"Ned telemetry fail. status_code={tele_ned_result.status_code}")
+            exit()
+        tele_ned_pos = tele_ned_result.json()["info"]["position"]
+        print(f"Vehicle at {tele_ned_pos})")
+
+    # After completing the polygon, return the vehicle to the center using go_to_ned_wait
+    point_result = requests.post(f"{base_url}/movement/go_to_ned_wait", json=center_pos)
+    if point_result.status_code != 200:
+        print(f"Go_to_ned_wait command fail. status_code={point_result.status_code} point={center_pos}")
+        exit()
+    print(f"\nVehicle going back to the center")
+
+    #sleep ensures the vehicle has time to reach its desired position
+    sleep(SLEEP_TIME)
+    
+    print(f"Vehicle at the center")
+
+# Landing
+land_result = requests.get(f"{base_url}/command/land")
+if land_result.status_code != 200:
+    print(f"Land command fail. status_code={land_result.status_code}")
+    exit()
+print("\nVehicle landed.")
+
+```
+
+
+
+
