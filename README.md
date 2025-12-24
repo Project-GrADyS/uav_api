@@ -485,6 +485,8 @@ $$z_{i}=-(\cos(v_{i}\frac{2\pi}{n}) - \cos(v_{i-1}\frac{2\pi}{n}))$$
 
 To use this example, the user must define the same parameters `--sides`, `--radius`, and `--height` as demonstrated in the previous example. This file is located at `flight_examples/polygon/drive_polygon.py`.
 
+You can see a video of the example working in real life [here](https://www.youtube.com/watch?v=YH_3z9Of7aw).
+
 ```python
 import requests
 import math
@@ -644,6 +646,8 @@ For example, to pick up a package at (1m North, 3m East, 3m Up) and deliver it a
 If no arguments are provided, the script runs with default coordinates.
 
 This file is located at `flight_examples/delivery/delivery_simulation.py`.
+
+You can see a video of the example working in real life [here](https://www.youtube.com/watch?v=x57kGMiC7bs).
 
 ```Python
 #Objective: Control a drone via Python to simulate a delivery.
