@@ -107,6 +107,14 @@ def parse_api(api_parser):
         help='Sysid for Copter'
     )
 
+    api_parser.add_argument(
+        '--gradys_gs',
+        dest='gradys_gs',
+        type=str,
+        default=None,
+        help='Address for Gradys Ground Station connection'
+    )
+
 # SIMULATED PARSER
 def parse_simulated(simulated_parser):
 
