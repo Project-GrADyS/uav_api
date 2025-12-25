@@ -1,6 +1,9 @@
 import os
 import asyncio
 import aiohttp
+import signal
+import psutil
+import subprocess
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
@@ -36,6 +39,20 @@ description = f"""
 * CONNECTION_STRING = **{args.uav_connection}**
 """
 
+def kill_sitl_by_tag(tag_value):
+    """
+    Scans ALL system processes and kills those with the matching environment tag.
+    """
+    for proc in psutil.process_iter(['environ', 'name', 'pid']):
+        try:
+            # Check if our custom variable is in the process environment
+            env = proc.info.get('environ')
+            if env and env.get("UAV_SITL_TAG") == tag_value:
+                print(f"Found rogue process: {proc.info['name']} (PID: {proc.info['pid']}). Killing...")
+                proc.kill() # Use kill() for xterms as they can be stubborn
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Configure loggers
@@ -43,12 +60,25 @@ async def lifespan(app: FastAPI):
     # Start SITL
     if args.simulated:
         print("Starting SITL...")
+    # Create a unique tag for this specific SITL instance
+        sitl_tag = f"SITL_ID_{args.sysid}"
+    
+        # Add the tag to the environment variables
+        env = os.environ.copy()
+        env["UAV_SITL_TAG"] = sitl_tag 
+
+        # Expand the path as discussed before
+        ardupilot_base = os.path.expanduser(args.ardupilot_path)
+        script_path = os.path.join(ardupilot_base, "Tools/autotest/sim_vehicle.py")
+        
         out_str = f"--out {args.uav_connection} {' '.join([f'--out {address}' for address in args.gs_connection])} "
         home_dir = os.path.expanduser("~")
         ardupilot_logs = os.path.join(home_dir, "uav_api_logs", "ardupilot_logs")
-        sitl_command = f"xterm -e {args.ardupilot_path}/Tools/autotest/sim_vehicle.py -v ArduCopter -I {args.sysid} --sysid {args.sysid} -N -L {args.location} --speedup {args.speedup} {out_str} --use-dir={ardupilot_logs} &"
-        os.system(sitl_command)
-        print("SITL started.")
+        sitl_command = f"xterm -e {script_path} -v ArduCopter -I {args.sysid} --sysid {args.sysid} -N -L {args.location} --speedup {args.speedup} {out_str} --use-dir={ardupilot_logs}"
+        
+        # Start the process with the custom environment
+        sitl_process = subprocess.Popen(sitl_command.split(" "), env=env)
+        print(f"SITL started with PID {sitl_process.pid}.")
     copter = get_copter_instance(args.sysid, args.uav_connection if args.connection_type == "usb" else f"{args.connection_type}:{args.uav_connection}")
     
     # Starting task that will continuously drain MAVLink messages
@@ -67,9 +97,9 @@ async def lifespan(app: FastAPI):
 
     # Close SITL
     if args.simulated:
-        print("Closing SITL...")
-        os.system("pkill xterm")
-        print("SITL closed.")
+        print("Closing SITL and all associated windows...")
+        kill_sitl_by_tag(sitl_tag)
+        print("SITL and associated windows closed.")
 
     # Cancelling Drain Mav Loop Task
     print("Cancelling Drain MAVLink loop...")
