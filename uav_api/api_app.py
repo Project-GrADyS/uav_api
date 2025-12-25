@@ -1,5 +1,6 @@
 import os
 import asyncio
+import aiohttp
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
@@ -10,6 +11,7 @@ from uav_api.routers.telemetry import telemetry_router
 from uav_api.routers.peripherical import peripherical_router
 from uav_api.log import set_log_config
 from uav_api.args import read_args_from_env
+from uav_api.gradys_gs import send_location_to_gradys_gs
 
 args = read_args_from_env()
 
@@ -56,7 +58,8 @@ async def lifespan(app: FastAPI):
     # If defined, start location thread for Gradys Ground Station
     if args.gradys_gs is not None:
         print("Starting Gradys GS location task...")
-        location_coroutine = asyncio.create_task(copter.send_location_to_gradys_gs(args.sysid, args.port, args.gradys_gs))
+        session = aiohttp.ClientSession()
+        location_task = asyncio.create_task(send_location_to_gradys_gs(copter, session, args.port, args.gradys_gs))
     
     print("API is ready.")
     yield
@@ -80,12 +83,15 @@ async def lifespan(app: FastAPI):
     # Cancelling location coroutine if it was started
     if args.gradys_gs is not None:
         print("Cancelling Gradys GS location task...")
-        location_coroutine.cancel()
+        location_task.cancel()
 
         try:
             await location_task
         except asyncio.CancelledError:
             print("Location task has been cancelled.")
+
+        await session.close()
+        print("Gradys GS location task closed.")
 app = FastAPI(
     title="Uav_API",
     summary=f"API designed to simplify Copter control for Ardupilot UAVs (for now only QuadCopter is supported).",
