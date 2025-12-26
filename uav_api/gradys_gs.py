@@ -9,7 +9,12 @@ async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
         try:
             # Fetch location from Gradys Ground Station
             print("Fetching location for Gradys GS...")
-            location = uav.mav.location(relative_alt=True)
+            try:
+                location = uav.mav.location(relative_alt=True)
+            except Exception as e:
+                print(f"Error fetching location: {e}")
+                await asyncio.sleep(5)
+                continue
             print(f"Location fetched: alt={location.alt}, lat={location.lat}, lng={location.lng}")
             data = {
                 "id": uav.target_system,
@@ -33,5 +38,5 @@ async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
             except Exception as e:
                 print(f"Error sending location data: {e}")
         except Exception as e:
-            print(f"Error sending location from Gradys GS: {e}")
+            print(f"Error sending location to Gradys GS: {e}")
         await asyncio.sleep(5)  # Fetch location every second
