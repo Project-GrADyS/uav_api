@@ -13,9 +13,9 @@ async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
             print(f"Location fetched: alt={location.alt}, lat={location.lat}, lng={location.lon}")
             data = {
                 "id": uav.target_system,
-                "lat": str(location.lat), 
-                "lng": str(location.lon), 
-                "alt": str(location.relative_alt),
+                "lat": str(location.lat / 1.0e7), 
+                "lng": str(location.lon / 1.0e7), 
+                "alt": str(location.relative_alt / 1000),
                 "device": "uav",
                 "type": 102, # Internal UAV location update message type,
                 "seq": seq,
