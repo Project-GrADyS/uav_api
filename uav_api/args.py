@@ -115,6 +115,14 @@ def parse_api(api_parser):
         help='Address for Gradys Ground Station connection'
     )
 
+    api_parser.add_argument(
+        '--scripts_path',
+        dest='scripts_path',
+        type=str,
+        default=None,
+        help='Path for uav_scripts directoryS'
+    )
+
 # SIMULATED PARSER
 def parse_simulated(simulated_parser):
 
