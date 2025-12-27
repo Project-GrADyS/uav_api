@@ -12,6 +12,7 @@ from uav_api.routers.movement import movement_router
 from uav_api.routers.command import command_router
 from uav_api.routers.telemetry import telemetry_router
 from uav_api.routers.peripherical import peripherical_router
+from uav_api.routers.mission import mission_router
 from uav_api.log import set_log_config
 from uav_api.args import read_args_from_env
 from uav_api.gradys_gs import send_location_to_gradys_gs
@@ -130,7 +131,8 @@ app = FastAPI(
     openapi_tags=metadata,
     lifespan=lifespan
 )
-app.include_router(movement_router)
 app.include_router(command_router)
 app.include_router(telemetry_router)
+app.include_router(movement_router)
+app.include_router(mission_router)
 app.include_router(peripherical_router)
