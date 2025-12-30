@@ -1,6 +1,8 @@
+from uav_api.args import read_args_from_env
 from uav_api.copter import Copter
 
 copter = None
+args = None
 
 # in the future this function should use different prefix for connection_string based on CopterMode
 def get_copter_instance(sysid=None, connection=None):
@@ -9,3 +11,9 @@ def get_copter_instance(sysid=None, connection=None):
         copter = Copter(sysid=int(sysid))
         copter.connect(connection_string=connection)
     return copter
+
+def get_args():
+    global args
+    if args is None:
+        args = read_args_from_env()
+    return args
