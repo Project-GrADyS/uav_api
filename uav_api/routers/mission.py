@@ -1,7 +1,9 @@
-from pathlib import Path
 import shutil
 import time
-from fastapi import APIRouter, HTTPException, UploadFile, File, HTTPException
+
+from pathlib import Path
+from fastapi import APIRouter, HTTPException, UploadFile, File, HTTPException, Depends
+from uav_api.router_dependencies import get_scripts_path
 
 mission_router = APIRouter(
     prefix = "/mission",
@@ -9,21 +11,17 @@ mission_router = APIRouter(
 )
 
 
-# Define and create the upload directory
-# .expanduser() handles the "~" symbol correctly
-UPLOAD_DIR = Path("~/uav_scripts").expanduser()
-
 @mission_router.post("/upload-script/", tags=["mission"], summary="Uploads a mission script (.py file) to the UAV scripts directory")
-async def upload_script(file: UploadFile = File(...)):
+async def upload_script(file: UploadFile = File(...), scripts_path = Depends(get_scripts_path)):
     # 1. Validate file extension
-    if not file.filename.endswith(".py"):
-        raise HTTPException(status_code=400, detail="Only .py files are allowed.")
+    if not (file.filename.endswith(".py") or file.filename.endswith(".sh")):
+        raise HTTPException(status_code=400, detail="Only .py and .sh files are allowed.")
 
     # 2. Sanitize the filename
     # Path(file.filename).name extracts only the filename, 
     # preventing directory traversal attacks (e.g., ../../etc/passwd)
     safe_filename = Path(file.filename).name
-    target_path = UPLOAD_DIR / safe_filename
+    target_path = scripts_path / safe_filename
 
     try:
         # 3. Save the file
@@ -40,16 +38,16 @@ async def upload_script(file: UploadFile = File(...)):
     return {"info": f"Mission File '{safe_filename}' saved at {target_path} successfully."}
 
 @mission_router.get("/list-scripts/", tags=["mission"], summary="Lists all uploaded mission scripts")
-def list_scripts():
+def list_scripts(scripts_path = Depends(get_scripts_path)):
     try:
-        scripts = [f.name for f in UPLOAD_DIR.glob("*.py") if f.is_file()]
+        scripts = [f.name for f in scripts_path.glob("*.py") if f.is_file()]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not list scripts: {e}")
 
     return {"scripts": scripts}
 
 @mission_router.get("/execute-script/{script_name}", tags=["mission"], summary="Executes a specified mission script")
-def execute_script(script_name: str):
+def execute_script(script_name: str, scripts_path = Depends(get_scripts_path)):
     # Prevent directory traversal and extract a simple filename
     safe_name = Path(script_name).name
 
@@ -57,7 +55,7 @@ def execute_script(script_name: str):
     if not safe_name.endswith(".py"):
         safe_name = safe_name + ".py"
 
-    script_path = UPLOAD_DIR / safe_name
+    script_path = scripts_path / safe_name
 
     # Check existence
     if not script_path.exists() or not script_path.is_file():
@@ -87,7 +85,7 @@ def execute_script(script_name: str):
         # start_new_session detaches the child from the parent terminal on Unix
         proc = subprocess.Popen(
             [sys.executable, str(script_path)],
-            cwd=str(UPLOAD_DIR),
+            cwd=str(scripts_path),
             stdout=out_f,
             stderr=err_f,
             start_new_session=True,

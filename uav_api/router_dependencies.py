@@ -1,10 +1,10 @@
+from pathlib import Path
 from uav_api.args import read_args_from_env
 from uav_api.copter import Copter
 
 copter = None
-args = None
+scripts_path = None
 
-# in the future this function should use different prefix for connection_string based on CopterMode
 def get_copter_instance(sysid=None, connection=None):
     global copter
     if copter is None:
@@ -12,8 +12,9 @@ def get_copter_instance(sysid=None, connection=None):
         copter.connect(connection_string=connection)
     return copter
 
-def get_args():
-    global args
-    if args is None:
+def get_scripts_path():
+    global scripts_path
+    if scripts_path is None:
         args = read_args_from_env()
-    return args
+        scripts_path = Path(args.scripts_path).expanduser()
+    return scripts_path
