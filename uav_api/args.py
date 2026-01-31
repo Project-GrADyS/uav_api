@@ -119,8 +119,8 @@ def parse_api(api_parser):
         '--scripts_path',
         dest='scripts_path',
         type=str,
-        default=None,
-        help='Path for uav_scripts directoryS'
+        default="~/uav_scripts",
+        help='Path for uav_scripts directory'
     )
 
 # SIMULATED PARSER
