@@ -4,14 +4,14 @@ import time
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, HTTPException, Depends
 from uav_api.router_dependencies import get_args
+from uav_api.classes.script import Script
 
 mission_router = APIRouter(
     prefix = "/mission",
     tags = ["mission"],
 )
 
-
-@mission_router.post("/upload-script/", tags=["mission"], summary="Uploads a mission script (.py file) to the UAV scripts directory")
+@mission_router.post("/upload-script", tags=["mission"], summary="Uploads a mission script (.py file) to the UAV scripts directory")
 async def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
     # 1. Validate file extension
     if not (file.filename.endswith(".py") or file.filename.endswith(".sh")):
@@ -35,21 +35,21 @@ async def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
         # Always close the SpooledTemporaryFile
         await file.close()
 
-    return {"info": f"Mission File '{safe_filename}' saved at {target_path} successfully."}
+    return {"device": "uav", "id": str(args.sysid), "type": 44, "info": f"Mission File '{safe_filename}' saved at {target_path} successfully."}
 
-@mission_router.get("/list-scripts/", tags=["mission"], summary="Lists all uploaded mission scripts")
+@mission_router.get("/list-scripts", tags=["mission"], summary="Lists all uploaded mission scripts")
 def list_scripts(args = Depends(get_args)):
     try:
         scripts = [f.name for f in (Path(args.scripts_path).expanduser()).glob("*.py") if f.is_file()]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not list scripts: {e}")
 
-    return {"scripts": scripts}
+    return {"device": "uav", "id": str(args.sysid), "type": 42, "scripts": scripts}
 
-@mission_router.get("/execute-script/{script_name}", tags=["mission"], summary="Executes a specified mission script")
-def execute_script(script_name: str, args = Depends(get_args)):
+@mission_router.post("/execute-script/", tags=["mission"], summary="Executes a specified mission script")
+def execute_script(script: Script, args = Depends(get_args)):
     # Prevent directory traversal and extract a simple filename
-    safe_name = Path(script_name).name
+    safe_name = Path(script.script_name).name
 
     # Ensure .py extension
     if not safe_name.endswith(".py"):
@@ -97,6 +97,9 @@ def execute_script(script_name: str, args = Depends(get_args)):
 
     # Return process info and log paths (absolute)
     return {
+        "device": "uav",
+        "id": str(args.sysid),
+        "type": 46,
         "script": safe_name,
         "pid": proc.pid,
     }
