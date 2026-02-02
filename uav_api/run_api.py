@@ -22,7 +22,12 @@ def run_with_args(raw_args=None):
 
 def main():
     api_process = run_with_args()
-    api_process.wait()
+    try:
+        api_process.wait()
+    except KeyboardInterrupt:
+        api_process.terminate()
+        api_process.wait()  # Wait for the process to actually terminate
+        print("UAV API process terminated.")
 
 if __name__ == "__main__":
     main()
