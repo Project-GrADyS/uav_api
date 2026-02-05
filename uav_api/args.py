@@ -123,6 +123,13 @@ def parse_api(api_parser):
         help='Path for uav_scripts directory'
     )
 
+    api_parser.add_argument(
+        '--python_path',
+        dest='python_path',
+        type=str,
+        default="python3",
+        help='Path for python binary to use when executing scripts'
+    )
 # SIMULATED PARSER
 def parse_simulated(simulated_parser):
 
