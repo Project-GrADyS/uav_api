@@ -38,6 +38,13 @@ def setup(args):
         home_dir = os.path.expanduser("~")  # Gets the user's home directory
         args.log_path = os.path.join(home_dir, "uav_api_logs","uav_logs",f"uav_{args.sysid}.log")
 
+    if args.script_logs is None:
+        ensure_home_subdir_exists("uav_api_logs")
+        ensure_home_subdir_exists("uav_api_logs/script_logs")
+
+        home_dir = os.path.expanduser("~")  # Gets the user's home directory
+        args.script_logs = os.path.join(home_dir, "uav_api_logs","script_logs")
+
     if args.scripts_path is None:
         ensure_home_subdir_exists("uav_scripts")
         args.scripts_path = os.path.join(home_dir, "uav_scripts")

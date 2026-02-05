@@ -1,6 +1,8 @@
 import shutil
 import time
 import subprocess
+import datetime
+import os
 
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, HTTPException, Depends
@@ -51,10 +53,15 @@ def list_scripts(args = Depends(get_args)):
 def execute_script(script: Script, args = Depends(get_args)):
     # Prevent directory traversal and extract a simple filename
     safe_name = Path(script.script_name).name
-
     # Ensure .py extension
     if not safe_name.endswith(".py"):
         safe_name = safe_name + ".py"
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    script_base = os.path.splitext(safe_name)[0]  # Removes '.py' extension
+
+    out_file = f"{args.script_logs}/{script_base}_{timestamp}_out.log"
+    err_file = f"{args.script_logs}/{script_base}_{timestamp}_err.log"
 
     script_path = Path(args.scripts_path).expanduser() / safe_name
 
@@ -81,7 +88,7 @@ def execute_script(script: Script, args = Depends(get_args)):
 
     # 3. Prepare the command sequence
     # We chain commands with '&&' to ensure they run in order
-    command = f"{args.python_path} {script_path}"
+    command = f"{args.python_path} {script_path} 1> {out_file} 2> {err_file}"
     
     # 4. Send the command to the session
     subprocess.run(["tmux", "send-keys", "-t", session_name, command, "C-m"])
