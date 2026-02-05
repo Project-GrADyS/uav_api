@@ -1,24 +1,42 @@
 import asyncio
 import logging
-import socket
+import subprocess
 
-def get_local_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+def get_system_ip():
+    interface = "wlan0"
+    
+    # 1. Try 'ip addr show wlan0'
     try:
-        # We don't even have to be reachable for this to work
-        s.connect(('8.8.8.8', 1))
-        ip = s.getsockname()[0]
+        # We use shell=True to easily pipe into grep
+        cmd = f"ip -4 addr show {interface} | grep -oP '(?<=inet\s)\d+(\.\d+){{3}}'"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        # If grep found an IP, it returns 0. If it found nothing, it returns non-zero.
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+            
     except Exception:
-        ip = '127.0.0.1'
-    finally:
-        s.close()
-    return ip
+        pass # Fall through to the backup method
+
+    # 2. Backup: Try 'hostname -I'
+    try:
+        # This returns all assigned IPs as a space-separated string
+        result = subprocess.run(["hostname", "-I"], capture_output=True, text=True)
+        ips = result.stdout.strip().split()
+        
+        if ips:
+            return ips[0]  # Return the first available IP
+            
+    except Exception:
+        pass
+
+    return "127.0.0.1" # Absolute fallback
 
 async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
     """Asynchronously send location data to Gradys Ground Station."""
     path = "http://" + gradys_gs_address + "/update-info/"
     seq = 0
-    ip_address = get_local_ip()
+    ip_address = get_system_ip()
 
     _logger = logging.getLogger("GRADYS_GS")
 
