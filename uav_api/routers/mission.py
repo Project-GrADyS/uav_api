@@ -1,5 +1,6 @@
 import shutil
 import time
+import subprocess
 
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, HTTPException, Depends
@@ -61,39 +62,32 @@ def execute_script(script: Script, args = Depends(get_args)):
     if not script_path.exists() or not script_path.is_file():
         raise HTTPException(status_code=404, detail=f"Script '{safe_name}' not found.")
 
-    # Start the script in background, redirect stdout/stderr to log files
-    import subprocess
-    import sys
+    session_name = "api-script"
+    
+    # Check if the tmux session already exists
+    # '0' exit code means it exists
+    has_session = subprocess.run(["tmux", "has-session", "-t", session_name], 
+                                 capture_output=True)
 
-    LOG_DIR = Path("~/uav_api_logs/script_logs").expanduser()
-    try:
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not create log directory: {e}")
+    if has_session.returncode != 0:
+        # 1. Create a new detached session
+        subprocess.run(["tmux", "new-session", "-d", "-s", session_name])
+        print(f"Session '{session_name}' started.")
+    else:
+        # 2. Session exists: Send Interrupt (Ctrl+C) to stop any running process
+        print(f"Session '{session_name}' already exists. Restarting script...")
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "C-c", "C-m"])
+        time.sleep(0.5) # Give it a moment to stop
 
-    ts = int(time.time())
-    stdout_log = LOG_DIR / f"{safe_name}.{ts}.out.log"
-    stderr_log = LOG_DIR / f"{safe_name}.{ts}.err.log"
-
-    try:
-        out_f = stdout_log.open("w")
-        err_f = stderr_log.open("w")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not open log files: {e}")
-
-    try:
-        # start_new_session detaches the child from the parent terminal on Unix
-        proc = subprocess.Popen(
-            [sys.executable, str(script_path)],
-            cwd=str(Path(args.scripts_path).expanduser()),
-            stdout=out_f,
-            stderr=err_f,
-            start_new_session=True,
-        )
-    except Exception as e:
-        out_f.close()
-        err_f.close()
-        raise HTTPException(status_code=500, detail=f"Failed to start script: {e}")
+    # 3. Prepare the command sequence
+    # We chain commands with '&&' to ensure they run in order
+    command = f"{args.python_path} {script_path}"
+    
+    # 4. Send the command to the session
+    subprocess.run(["tmux", "send-keys", "-t", session_name, command, "C-m"])
+    
+    print(f"Running: {safe_name}")
+    print(f"To view, use: tmux attach -t {session_name}")
 
     # Return process info and log paths (absolute)
     return {
@@ -101,5 +95,4 @@ def execute_script(script: Script, args = Depends(get_args)):
         "id": str(args.sysid),
         "type": 46,
         "script": safe_name,
-        "pid": proc.pid,
     }
