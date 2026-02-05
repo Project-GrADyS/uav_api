@@ -2,12 +2,23 @@ import asyncio
 import logging
 import socket
 
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # We don't even have to be reachable for this to work
+        s.connect(('8.8.8.8', 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
 async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
     """Asynchronously send location data to Gradys Ground Station."""
     path = "http://" + gradys_gs_address + "/update-info/"
     seq = 0
-    hostname = socket.gethostname()
-    ip_address = socket.gethostbyname(hostname)
+    ip_address = get_local_ip()
 
     _logger = logging.getLogger("GRADYS_GS")
 

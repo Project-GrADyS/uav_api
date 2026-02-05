@@ -1,9 +1,9 @@
 import shutil
 import time
 import subprocess
-import datetime
 import os
 
+from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, HTTPException, Depends
 from uav_api.router_dependencies import get_args
