@@ -187,7 +187,7 @@ def parse_logs(logs_parser):
         "--log_path",
         dest="log_path",
         default=None,
-        help="If provided, saves log files to path. This log file will receive the logs from all loggers of that UAV. Which include: COPTER, PROTOCOL and API."
+        help="Saves log files to the provided path. This log file will receive the logs from all loggers of that UAV. Which include: COPTER, GRADYS_GS and API."
     )
 
     logs_parser.add_argument(
@@ -197,4 +197,11 @@ def parse_logs(logs_parser):
         type=valid_loggers_type,
         help="Which loggers to apply debug level. Possible logger: COPTER, PROTOCOL and API.",
         nargs="*"
+    )
+
+    logs_parser.add_argument(
+        "--script_logs",
+        dest="script_logs",
+        default=None,
+        help="Saves script executed by mission route out and err files to the provided path"
     )
