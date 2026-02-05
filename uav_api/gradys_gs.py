@@ -1,10 +1,13 @@
 import asyncio
 import logging
+import socket
 
 async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
     """Asynchronously send location data to Gradys Ground Station."""
     path = "http://" + gradys_gs_address + "/update-info/"
     seq = 0
+    hostname = socket.gethostname()
+    ip_address = socket.gethostbyname(hostname)
 
     _logger = logging.getLogger("GRADYS_GS")
 
@@ -22,7 +25,7 @@ async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
                 "device": "uav",
                 "type": 102, # Internal UAV location update message type,
                 "seq": seq,
-                "ip": "127.0.0.1:"+str(api_port)+"/"
+                "ip": f"{ip_address}:{api_port}/"
             }
 
             _logger.info("Sending request to Gradys GS...")
