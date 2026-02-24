@@ -1,0 +1,16 @@
+[Unit]
+Description=UAV API - ArduPilot MAVLink HTTP REST API
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Environment=PATH=/home/pi/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/pi/venv/bin/uav-api --config /home/pi/uav_api/flight_examples/uavs/real_drone.ini
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
