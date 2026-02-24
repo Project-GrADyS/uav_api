@@ -1,67 +1,78 @@
-# Uav_api
-This is the repository for Uav_api, an API for UAV autonomous flights. The Uav_api enables UAV movement, telemetry and basic command execution such as RTL and TAKEOFF through HTTP requests, facilitating remote controlled flights, both programmatically and manually. In addition to that, Uav_api supports protocol execution for autonomous flights, oferring the same interface as gradysim-nextgen simulator. At last but not least, Uav_api can be used for simulations based on Ardupilot's SITL.
+# UAV API
+
+HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports real drones via MAVLink and simulated drones via ArduPilot SITL.
+
+**Features:**
+- Full flight control: arm, takeoff, land, RTL, speed configuration
+- GPS and NED movement commands (fire-and-forget and blocking variants)
+- Rich telemetry: GPS, NED position, compass, battery, sensor health
+- Mission scripting: upload, list, and execute `.py`/`.sh` scripts remotely
+- Gradys Ground Station integration: periodic GPS location push
+- Visual feedback via Mission Planner or any MAVLink GCS
+- Camera peripheral support
+- Configurable logging per component
+
+---
 
 # Installation
+
 ## Prerequisites
-Python 3.10 is required
-If simulated flights are intended, installing Ardupilot's codebase is necessary. To do that follow the instructions at https://ardupilot.org/dev/docs/where-to-get-the-code.html (Don't forget to build the environment after cloning). In addition to that, following the steps for running the SITL is also required, which are stated at https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
 
-## Installing with pip (recommended)
-To install uav-api python package run the following command:
+- Python 3.8+
+- For simulated flights: ArduPilot repository built locally, and `xterm` installed.
+  - Clone and build ArduPilot: https://ardupilot.org/dev/docs/where-to-get-the-code.html
+  - SITL setup guide: https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
 
-  `pip install uav-api`
+## Installing from PyPI (recommended)
 
-This will install the package in your current environment.
-After the installation is over, restart you terminal instance and you are ready to go!
-
-## Using git repository
-It is also possible to install a local development version of uav_api where you can make changes.
-Start by cloning the repository
-
-  `git clone https://github.com/Project-GrADyS/uav_api`
-
-Then, inside of the cloned repository, run the command:
-
-  `pip install -e .`
-
-Now close and re-open your terminal instance and you are ready to go!
-
-# Executing the api in a real drone
-## Starting Uav_api
-To start the server, run the following command:
-
-  `uav-api --port [port for API] --uav_connection [ardupilot_connection] --connection_type [udpin or updout] --sysid [sysid for ardupilot]`
-
-Alternatively, you can use a configuration file in the following .ini format.
+```bash
+pip install uav-api
 ```
-[api]
-port = 8000
-uav_connection = 127.0.0.1:17171
-connection_type = udpin
-sysid = 1
+
+Restart your terminal after installation.
+
+## Installing from source (development)
+
+```bash
+git clone https://github.com/Project-GrADyS/uav_api
+cd uav_api
+pip install -e .
 ```
-And run the command:
 
-  `uav-api --config /path_to_config`
+Restart your terminal after installation.
 
-To see more arguments options and to get better insight on the arguments for `uav-api` run the command bellow:
+---
 
-  `uav-api --help`
+# Getting Started
 
-And that's it! You can start sending HTTP requests to Uav_api
+## Running with a real drone
 
-# Executing a Simulated flight
-Executing a simulated flight with UAV API is almost exactly the same as in a real drone, the only difference is that simulated flights take a few more arguments.
-## Starting Uav_api and SITL at the same time
-To instantiate the API and Ardupilot's SITL, run the following command:
+Connect your drone via UDP or USB, then start the API:
 
-  `uav-api --simulated true --ardupilot_path [path to ardupilot repository] --speedup [speedup factor for SITL] --gs_connection [ip:port telemetry routing for groundstation softwares] --port [port for API] --uav_connection [ardupilot_connection] --connection_type [udpin or updout] --sysid [sysid for ardupilot]`
-
-This command initiates both the SITL, and the Uav_api API. The connection addres of the SITL instance is the one set in `uav_connection` argument and the speedup factor of the simulation is set to the value of the `speedup` argument.
-
-It is also possible to start simulated flights through configuration files.
-
+```bash
+uav-api --port 8000 --uav_connection 127.0.0.1:17171 --connection_type udpin --sysid 1
 ```
+
+The `--connection_type` controls the UDP direction:
+- `udpin` — API listens, drone connects to it (most common)
+- `udpout` — API connects out to the drone
+- `usb` — serial connection (set `--uav_connection` to the serial device path, e.g. `/dev/ttyUSB0`)
+
+## Running in simulation (SITL)
+
+This starts both ArduCopter SITL (in a new `xterm` window) and the API:
+
+```bash
+uav-api --simulated true --ardupilot_path ~/ardupilot --speedup 1 --port 8000 --sysid 1
+```
+
+SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`). The `--speedup` factor controls simulation speed (e.g. `5` = 5× real time). The `--location` argument sets the SITL home position (default `AbraDF`).
+
+## Using a configuration file
+
+All arguments can be provided via an INI file:
+
+```ini
 [api]
 port=8000
 uav_connection=127.0.0.1:17171
@@ -70,29 +81,176 @@ sysid=1
 
 [simulated]
 ardupilot_path=~/ardupilot
-gs_connection=[172.26.176.1:15630]
+location=AbraDF
+gs_connection=[]
 speedup=1
+
+[logs]
+log_console=[]
+log_path=None
+debug=[]
+script_logs=None
 ```
 
-With the command:
+Run with:
 
-`uav-api --config /path_to_config`
+```bash
+uav-api --config /path/to/config.ini
+```
 
-# Testing and feedback
-## Testing API initialization
-To verify the initialization of the API go to the endpoint `localhost:[your_port]/docs`.
+CLI arguments always override values from the config file. Example config files for single and multi-UAV setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`.
+
+## Verifying the API
+
+Open the interactive Swagger UI in your browser:
+
+```
+http://localhost:<port>/docs
+```
+
 <img src="https://github.com/user-attachments/assets/6ef0d0b1-4dd7-4049-b16e-f3b509ab1b94" />
 
-Once inside the web page, scroll to telemetry router and execute the `telemetry/general` endpoint.
+Scroll to the **telemetry** router and call `GET /telemetry/general`:
+
 ![image](https://github.com/user-attachments/assets/4d1922a7-91c3-4873-81cc-5db9961a2e18)
 
-If everything is fine, the answer should look like this.
+A successful response confirms the API is connected to the vehicle:
+
 ![image](https://github.com/user-attachments/assets/47e7c802-6411-4864-9f1c-280327c4303c)
 
-## Visual feedback with Mission Planner
-To get visual feedback of drone position and telemetry use Mission Planner, or any other ground station software of your preference, and connect to UDP port specified in `gs_connection` parameter.
+---
+
+# CLI Arguments Reference
+
+All arguments can be passed on the command line or set in an INI config file. Run `uav-api --help` for a quick reference.
+
+## General (all modes)
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--config` | None | Path to INI config file (`[api]`, `[simulated]`, `[logs]` sections) |
+| `--port` | 8000 | HTTP port the API listens on |
+| `--sysid` | 10 | MAVLink system ID; must match the drone's `SYSID_THISMAV` parameter |
+| `--uav_connection` | `127.0.0.1:17171` | MAVLink address — `host:port` for UDP, or serial device path for USB |
+| `--gradys_gs` | None | `host:port` of Gradys Ground Station — enables periodic GPS location push |
+| `--scripts_path` | `~/uav_scripts` | Directory where uploaded scripts are saved and executed from |
+| `--python_path` | `python3` | Python binary used to run uploaded `.py` scripts |
+
+## Connection (real drone)
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--connection_type` | `udpin` | `udpin` — API listens; `udpout` — API connects out; `usb` — serial |
+
+## Simulation only
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--simulated` | `false` | Set to `true` to spawn ArduCopter SITL alongside the API |
+| `--ardupilot_path` | `~/ardupilot` | Path to local ArduPilot repository |
+| `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`) |
+| `--speedup` | 1 | SITL simulation time multiplier |
+| `--gs_connection` | `[]` | Extra `host:port` addresses SITL streams telemetry to (e.g. Mission Planner) |
+
+## Logging
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--log_console` | `[]` | Components to print logs to console: `COPTER` `API` `GRADYS_GS` |
+| `--log_path` | None | File path to write all component logs combined |
+| `--debug` | `[]` | Same component names as `--log_console` but at DEBUG verbosity |
+| `--script_logs` | None | Directory where script stdout/stderr are saved as timestamped `.log` files |
+
+---
+
+# Extra Features
+
+## Gradys Ground Station Integration
+
+When `--gradys_gs <host:port>` is set, the API starts a background coroutine that POSTs the vehicle's GPS position to the Gradys GS every second:
+
+```bash
+uav-api --port 8000 --sysid 1 --gradys_gs 192.168.1.10:5000
+```
+
+Each POST to `http://<gradys_gs>/update-info/` includes: latitude, longitude, altitude, device type, a sequence number, and the API's own IP and port. This allows the Gradys ecosystem to track the UAV in real time.
+
+## Visual Feedback with Mission Planner
+
+When running in simulated mode, use `--gs_connection` to stream MAVLink telemetry to Mission Planner (or any GCS software):
+
+```bash
+uav-api --simulated true --ardupilot_path ~/ardupilot --sysid 1 --gs_connection [192.168.1.5:14550]
+```
+
+Connect Mission Planner to the specified UDP address to see live position, attitude, and flight data.
 
 ![image](https://github.com/user-attachments/assets/b7928581-89c6-46c0-9f02-3bd8edd30570)
+
+## Logging System
+
+Control what gets logged and where with the logging arguments:
+
+```bash
+# Print COPTER and API logs to console
+uav-api --log_console COPTER API ...
+
+# Write all logs to a file
+uav-api --log_path ~/uav_api.log ...
+
+# Enable DEBUG verbosity for the COPTER component
+uav-api --debug COPTER ...
+
+# Save script stdout/stderr to a directory
+uav-api --script_logs ~/uav_api_logs/script_logs ...
+```
+
+Available log components: `COPTER`, `API`, `GRADYS_GS`.
+
+## Mission Script Management
+
+The API can host and execute Python or shell scripts on the UAV's companion computer. This is useful for deploying autonomous mission logic remotely.
+
+**Upload a script:**
+```
+POST /mission/upload-script   (multipart form, field: file)
+```
+Accepts `.py` and `.sh` files. Saved to `--scripts_path` (default `~/uav_scripts`).
+
+**List uploaded scripts:**
+```
+GET /mission/list-scripts
+```
+
+**Execute a script:**
+```
+POST /mission/execute-script/
+Body: {"script_name": "my_script"}
+```
+
+Scripts run in a persistent tmux session named `api-script`. If a script is already running, it is interrupted before the new one starts. Attach to the session for live output:
+
+```bash
+tmux attach -t api-script
+```
+
+If `--script_logs` is set, stdout and stderr are saved as:
+```
+<script_logs>/<name>_<timestamp>_out.log
+<script_logs>/<name>_<timestamp>_err.log
+```
+
+## Camera Peripheral
+
+Capture a 1280×720 JPEG image from a connected webcam (requires `fswebcam`):
+
+```
+GET /peripherical/take_picture
+```
+
+Returns the image as `image/jpeg` (`Content-Disposition: attachment; filename="image.jpg"`).
+
+---
 
 # Flying through scripts
 One of the perks of using UAV API is being aple to quickly write scripts that control drone movement. Here are some examples
@@ -304,7 +462,7 @@ while (current_time - start_time) <= 30:
     if movement_result.status_code != 200:
         print(f"Follower go to ({movement_data['x']}, {movement_data['y']}, {movement_data['z']}) failed. status_code={movement_result.status_code}")
         exit()
-    
+
     print(f"Follower going to ({movement_data['x']}, {movement_data['y']}, {movement_data['z']}).")
 
     sleep(2)
@@ -1030,3 +1188,70 @@ if __name__ == "__main__":
 
 
 
+---
+
+# Project Architecture
+
+## Module Map
+
+| Path | Purpose |
+|------|---------|
+| `uav_api/run_api.py` | CLI entry point — parses args, runs setup, launches uvicorn |
+| `uav_api/api_app.py` | FastAPI app definition and lifespan (startup/shutdown logic) |
+| `uav_api/copter.py` | Core vehicle abstraction — all MAVLink logic (~1850 lines) |
+| `uav_api/args.py` | CLI argument parsing; config serialized to `UAV_ARGS` env var |
+| `uav_api/router_dependencies.py` | Singleton `Copter` instance and `args` via `Depends()` |
+| `uav_api/gradys_gs.py` | Async coroutine that POSTs GPS location to Gradys GS every second |
+| `uav_api/log.py` | Logger configuration (file + console, per-component) |
+| `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ArduPilot config) |
+| `uav_api/routers/command.py` | Endpoints: arm, takeoff, land, RTL, speed, home |
+| `uav_api/routers/movement.py` | Endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs) |
+| `uav_api/routers/telemetry.py` | Endpoints: GPS, NED, compass, battery, sensor status, home info |
+| `uav_api/routers/mission.py` | Endpoints: upload-script, list-scripts, execute-script |
+| `uav_api/routers/peripherical.py` | Endpoints: take_picture |
+| `uav_api/classes/pos.py` | Pydantic models: `GPS_pos`, `Local_pos` |
+| `uav_api/classes/script.py` | Pydantic model: `Script` |
+| `flight_examples/` | Example client scripts and INI config files |
+
+## Processes and Coroutines
+
+The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespan. The following are started on API startup and stopped on shutdown:
+
+### Always started
+
+**uvicorn HTTP server**
+Launched by `uav_api/run_api.py`. All processes below run within its lifetime.
+
+**MAVLink drain loop**
+An `asyncio` task running `copter.run_drain_mav_loop()`. Continuously drains buffered MAVLink messages to prevent connection stalls. Cancelled on shutdown.
+
+### Conditional: simulated mode (`--simulated true`)
+
+**ArduCopter SITL process**
+Spawned as `xterm -e sim_vehicle.py -v ArduCopter ...` subprocess. Tagged with a unique environment variable (`UAV_SITL_TAG=SITL_ID_<sysid>`). On shutdown, all system processes carrying that tag are killed via `psutil`, ensuring clean teardown even if xterm spawned child processes.
+
+### Conditional: Gradys GS integration (`--gradys_gs` is set)
+
+**GS location push coroutine**
+An `asyncio` task running `send_location_to_gradys_gs()` (defined in `uav_api/gradys_gs.py`). POSTs the vehicle's GPS position to `http://<gradys_gs>/update-info/` every second using a shared `aiohttp.ClientSession`. Task is cancelled and the session is closed on shutdown.
+
+## Dependency Injection
+
+A single `Copter` instance and a single `args` namespace are held as module-level globals in `uav_api/router_dependencies.py`. All routers receive them via FastAPI's `Depends()`:
+
+```python
+Depends(get_copter_instance)  # shared Copter (one MAVLink connection)
+Depends(get_args)             # parsed CLI/config arguments
+```
+
+CLI arguments are serialized to JSON in the `UAV_ARGS` environment variable before uvicorn forks, allowing all processes to access the same configuration without re-parsing.
+
+## API Response Format
+
+All successful responses follow a uniform envelope:
+
+```json
+{"device": "uav", "id": "<sysid>", "result": "..."}
+```
+
+Telemetry endpoints add an `"info": {...}` field with the sensor data. All errors raise `HTTP 500` with a descriptive `"detail"` string.
