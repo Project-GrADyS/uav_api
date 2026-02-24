@@ -103,3 +103,18 @@ def execute_script(script: Script, args = Depends(get_args)):
         "type": 46,
         "script": safe_name,
     }
+
+@mission_router.delete("/clear", tags=["mission"], summary="Removes all script files (.py and .sh) from the scripts directory")
+def clear_scripts(args = Depends(get_args)):
+    scripts_dir = Path(args.scripts_path).expanduser()
+    try:
+        removed = []
+        for f in scripts_dir.iterdir():
+            if f.is_file() and f.suffix in (".py", ".sh"):
+                f.unlink()
+                removed.append(f.name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"CLEAR SCRIPTS FAIL: {e}")
+
+    return {"device": "uav", "id": str(args.sysid), "type": 48,
+            "info": f"Removed {len(removed)} script(s)", "removed": removed}
