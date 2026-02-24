@@ -7,7 +7,7 @@ include = ["uav_api*"]
 
 [project]
 name = "uav_api"
-version = "0.0.5"
+version = "0.1.0"
 description = "Uav_api is a python package that provides a HTTP interface for MAVLink commands for ardupilot vehicles"
 keywords = ["mavlink", "http", "simulation", "gradys", "LAC", "PUC", "drone", "ardupilot"]
 authors = [
@@ -29,7 +29,10 @@ dependencies = [
     'pymavlink>=2.4.41',
     'uvicorn>=0.32.0',
     'future>=1.0.0',
-    'pexpect>=4.9.0'
+    'pexpect>=4.9.0',
+    'aiohttp>=3.9.0',
+    'psutil>=5.9.0',
+    'python-multipart>=0.0.6'
 ]
 
 [project.urls]

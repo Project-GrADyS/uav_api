@@ -2,5 +2,9 @@ fastapi==0.120.4
 mavproxy==1.8.74
 pydantic==2.12.3
 pymavlink==2.4.49
+uvicorn==0.32.0
 future==1.0.0
 pexpect==4.9.0
+aiohttp==3.11.14
+psutil==7.0.0
+python-multipart==0.0.21
