@@ -6,6 +6,7 @@ import time
 import datetime
 import logging
 import asyncio
+import aiohttp
 
 from pymavlink import mavwp
 from MAVProxy.modules.lib import mp_util

@@ -107,6 +107,29 @@ def parse_api(api_parser):
         help='Sysid for Copter'
     )
 
+    api_parser.add_argument(
+        '--gradys_gs',
+        dest='gradys_gs',
+        type=str,
+        default=None,
+        help='Address for Gradys Ground Station connection'
+    )
+
+    api_parser.add_argument(
+        '--scripts_path',
+        dest='scripts_path',
+        type=str,
+        default="~/uav_scripts",
+        help='Path for uav_scripts directory'
+    )
+
+    api_parser.add_argument(
+        '--python_path',
+        dest='python_path',
+        type=str,
+        default="python3",
+        help='Path for python binary to use when executing scripts'
+    )
 # SIMULATED PARSER
 def parse_simulated(simulated_parser):
 
@@ -146,7 +169,7 @@ def parse_logs(logs_parser):
 
     # Defines which values are accepted as a LOGGER input.
     def valid_loggers_type(value):
-        valid_loggers = {'API', 'COPTER'}
+        valid_loggers = {'API', 'COPTER', 'GRADYS_GS'}
         if not value in valid_loggers:
             raise argparse.ArgumentTypeError('Invalid value. Please choose one of the following: value1, value2, or both')
         return value
@@ -164,7 +187,7 @@ def parse_logs(logs_parser):
         "--log_path",
         dest="log_path",
         default=None,
-        help="If provided, saves log files to path. This log file will receive the logs from all loggers of that UAV. Which include: COPTER, PROTOCOL and API."
+        help="Saves log files to the provided path. This log file will receive the logs from all loggers of that UAV. Which include: COPTER, GRADYS_GS and API."
     )
 
     logs_parser.add_argument(
@@ -174,4 +197,11 @@ def parse_logs(logs_parser):
         type=valid_loggers_type,
         help="Which loggers to apply debug level. Possible logger: COPTER, PROTOCOL and API.",
         nargs="*"
+    )
+
+    logs_parser.add_argument(
+        "--script_logs",
+        dest="script_logs",
+        default=None,
+        help="Saves script executed by mission route out and err files to the provided path"
     )
