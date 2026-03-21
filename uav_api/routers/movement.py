@@ -3,7 +3,7 @@ from time import sleep
 from fastapi import APIRouter, Depends, HTTPException
 from uav_api.copter import Copter
 from uav_api.router_dependencies import get_copter_instance, get_args
-from uav_api.classes.pos import GPS_pos, Local_pos
+from uav_api.classes.movement import Gps_pos, Local_pos, Local_velocity
 
 movement_router = APIRouter(
     prefix = "/movement",
@@ -11,17 +11,17 @@ movement_router = APIRouter(
 )
 
 @movement_router.post("/go_to_gps/", tags=["movement"], summary="Moves the copter to specified GPS position")
-def go_to_gps(pos: GPS_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
+def go_to_gps(pos: Gps_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
-        uav.go_to_gps(pos.lat, pos.long, pos.alt)
+        uav.go_to_gps(pos.lat, pos.long, pos.alt, pos.look_at_target)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GO_TO FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Going to coord ({pos.lat}, {pos.long}, {pos.alt})"}
 
 @movement_router.post("/go_to_gps_wait", tags=["movement"], summary="Moves and waits for the copter to get to specified GPS position")
-def go_to_gps_wait(pos: GPS_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
+def go_to_gps_wait(pos: Gps_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
-        uav.go_to_gps(pos.lat, pos.long, pos.alt)
+        uav.go_to_gps(pos.lat, pos.long, pos.alt, pos.look_at_target)
         target_loc = uav.mav_location(pos.lat, pos.long, pos.alt)
         uav.wait_location(target_loc, timeout=60)
     except Exception as e:
@@ -31,7 +31,7 @@ def go_to_gps_wait(pos: GPS_pos, uav: Copter = Depends(get_copter_instance), arg
 @movement_router.post("/go_to_ned", tags=["movement"], summary="Moves to specified NED position")
 def go_to_ned(pos: Local_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
-        uav.go_to_ned(pos.x, pos.y, pos.z) 
+        uav.go_to_ned(pos.x, pos.y, pos.z, look_at_target=pos.look_at_target) 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GO_TO FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Going to NED coord ({pos.x}, {pos.y}, {pos.z})"}
@@ -39,7 +39,7 @@ def go_to_ned(pos: Local_pos, uav: Copter = Depends(get_copter_instance), args: 
 @movement_router.post("/go_to_ned_wait", tags=["movement"], summary="Moves and waits for the copter to get to specified NED position")
 def go_to_ned_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
-        uav.go_to_ned(pos.x, pos.y, pos.z)
+        uav.go_to_ned(pos.x, pos.y, pos.z, look_at_target=pos.look_at_target)
         uav.wait_ned_position(pos)
 
     except Exception as e:
@@ -49,7 +49,7 @@ def go_to_ned_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance), a
 @movement_router.post("/drive", tags=["movement"], summary="Drives copter the specified amount in meters")
 def drive(pos: Local_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
-        uav.drive_ned(pos.x, pos.y, pos.z)
+        uav.drive_ned(pos.x, pos.y, pos.z, look_at_target=pos.look_at_target)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DRIVE FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": "Copter is driving"}
@@ -58,12 +58,20 @@ def drive(pos: Local_pos, uav: Copter = Depends(get_copter_instance), args: Name
 def drive_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         current_pos = uav.get_ned_position()
-        uav.drive_ned(pos.x, pos.y, pos.z)
+        uav.drive_ned(pos.x, pos.y, pos.z, look_at_target=pos.look_at_target)
         target_pos = Local_pos(x=current_pos.x + pos.x, y=current_pos.y + pos.y, z=current_pos.z + pos.z)
         uav.wait_ned_position(target_pos)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DRIVE FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Copter arrived at ({target_pos.x}, {target_pos.y}, {target_pos.z})"}
+
+@movement_router.post("/travel_at_ned", tags=["movement"], summary="Travels at specified NED velocity")
+def travel_at_ned(vel: Local_velocity, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
+    try:
+        uav.travel_at_ned(vel.vx, vel.vy, vel.vz, look_at_target=vel.look_at_target)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TRAVEL FAIL: {e}")
+    return {"device": "uav", "id": str(args.sysid), "result": f"Travelling at NED velocity ({vel.vx}, {vel.vy}, {vel.vz})"}
 
 @movement_router.get("/stop", tags=["movement"])
 def stop(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):

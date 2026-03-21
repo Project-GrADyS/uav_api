@@ -13,7 +13,7 @@ from MAVProxy.modules.lib import mp_util
 from pymavlink import mavutil
 from pymavlink.rotmat import Vector3
 from pymavlink.mavutil import location
-from uav_api.classes.pos import Local_pos
+from uav_api.classes.movement import Local_pos
 
 class ErrorException(Exception):
     """Base class for other exceptions"""
@@ -1506,7 +1506,7 @@ Also, ignores heartbeats not from our target system"""
             self.wait_and_maintain(value_name="Holding", target=0, current_value_getter=lambda: travelled_distance(), timeout=timeout)
         except TimeoutException:
             raise TimeoutException("Moviment registred")
-    def go_to_gps(self, lat: float, long: float, alt: int):
+    def go_to_gps(self, lat: float, long: float, alt: int, look_at_target=False):
         self.progress(f"Moving to gps position (lat={lat}, long={long}, alt={alt})")
 
         self.mav.mav.set_position_target_global_int_send(
@@ -1522,7 +1522,7 @@ Also, ignores heartbeats not from our target system"""
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
-                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE,
+                                                            (mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE if look_at_target else 0),
                                                             int(lat * 1.0e7),  # lat
                                                             int(long * 1.0e7),  # lon
                                                             alt,  # alt
@@ -1536,7 +1536,7 @@ Also, ignores heartbeats not from our target system"""
                                                             0,  # yawrate
     )
          
-    def go_to_ned(self, north: float, east: float, down: float):
+    def go_to_ned(self, north: float, east: float, down: float, look_at_target=False):
         self.progress(f"Moving to ned position (north={north}, east={east}, down={down})")
 
         self.mav.mav.set_position_target_local_ned_send(
@@ -1552,7 +1552,7 @@ Also, ignores heartbeats not from our target system"""
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
-                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE,
+                                                            (mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE if look_at_target else 0),
                                                             float(north), # north offset to origin(home) (m)
                                                             float(east), # east offset to origin(home) (m)
                                                             float(down), # down offset to origin(home) (m)
@@ -1566,6 +1566,35 @@ Also, ignores heartbeats not from our target system"""
                                                             0, # yaw_rate (rad/s)
                                                         )
     
+    def travel_at_ned(self, vx: float, vy: float, vz: float, look_at_target=False):
+        self.progress(f"Moving at NED velocity (vx={vx}, vy={vy}, vz={vz})")
+
+        self.mav.mav.set_position_target_local_ned_send(
+                                                            0, # timestamp
+                                                            self.target_system, # target system_id
+                                                            self.target_component, # target component_id
+                                                            mavutil.mavlink.MAV_FRAME_LOCAL_NED, # coordinate frame
+                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_X_IGNORE |
+                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_Y_IGNORE |
+                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_Z_IGNORE |
+                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
+                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
+                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
+                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
+                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
+                                                            (mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE if look_at_target else 0),
+                                                            0, # north offset to origin(home) (m)
+                                                            0, # east offset to origin(home) (m)
+                                                            0, # down offset to origin(home) (m)
+                                                            float(vx), # x velocity (m/s)
+                                                            float(vy), # y velocity (m/s)
+                                                            float(vz), # z velocity (m/s)
+                                                            0, # x acceleration (m/s^2)
+                                                            0, # y acceleration (m/s^2)
+                                                            0, # z acceleration (m/s^2)
+                                                            0, # yam heading (radians)
+                                                            0, # yaw_rate (rad/s)
+                                                        )
     def get_ned_position(self, timeout=10):
         """Get and print LOCAL_POSITION_NED msg send by the drone.
         """
@@ -1600,7 +1629,7 @@ Also, ignores heartbeats not from our target system"""
                                 timeout=timeout
                             )
         
-    def drive_ned(self, north: float, east: float, down: float, timeout=60):
+    def drive_ned(self, north: float, east: float, down: float, look_at_target: bool = False, timeout=60):
         self.mav.mav.set_position_target_local_ned_send(
                                                             0, # timestamp
                                                             self.target_system, # target system_id
@@ -1614,7 +1643,7 @@ Also, ignores heartbeats not from our target system"""
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
-                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE,
+                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE if look_at_target else 0,
                                                             float(north), # north offset to origin(home) (m)
                                                             float(east), # east offset to origin(home) (m)
                                                             float(down), # down offset to origin(home) (m)
