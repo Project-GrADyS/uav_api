@@ -1,0 +1,2 @@
+[console_scripts]
+uav-agent = uav_agent.chat:main

@@ -11,8 +11,7 @@ from uav_api.router_dependencies import get_copter_instance
 from uav_api.routers.movement import movement_router
 from uav_api.routers.command import command_router
 from uav_api.routers.telemetry import telemetry_router
-from uav_api.routers.peripherical import peripherical_router
-from uav_api.routers.mission import mission_router
+from fastapi_mcp import FastApiMCP
 from uav_api.log import set_log_config
 from uav_api.args import read_args_from_env
 from uav_api.gradys_gs import send_location_to_gradys_gs
@@ -134,5 +133,12 @@ app = FastAPI(
 app.include_router(command_router)
 app.include_router(telemetry_router)
 app.include_router(movement_router)
-app.include_router(mission_router)
-app.include_router(peripherical_router)
+
+mcp = FastApiMCP(
+    app,
+    name="UAV MCP Server",
+    description="MCP server for controlling an ArduPilot UAV. Tools are organized in three groups: 'command' (arm, takeoff, land, RTL, speed settings), 'movement' (GPS/NED navigation, velocity control, stop/resume), and 'telemetry' (position, battery, sensors, errors). Always arm and takeoff before issuing movement commands. Use '_wait' variants of movement tools for sequential waypoint navigation.",
+    describe_all_responses=True,
+    describe_full_response_schema=True,
+)
+mcp.mount_http(app)

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["uav_agent*"]
+
+[project]
+name = "uav-agent"
+version = "0.1.0"
+description = "LangGraph agent for autonomous UAV control via MCP"
+requires-python = ">=3.10"
+
+dependencies = [
+    "langgraph>=0.5",
+    "langchain-anthropic>=0.3",
+    "langchain-mcp-adapters>=0.1",
+]
+
+[project.scripts]
+uav-agent = "uav_agent.chat:main"
