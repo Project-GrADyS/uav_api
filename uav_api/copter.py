@@ -1626,7 +1626,8 @@ Also, ignores heartbeats not from our target system"""
                                 target=0,
                                 current_value_getter=lambda: ned_distance(),
                                 validator=None,
-                                timeout=timeout
+                                timeout=timeout,
+                                accuracy=1
                             )
         
     def drive_ned(self, north: float, east: float, down: float, look_at_target: bool = False, timeout=60):
