@@ -46,7 +46,7 @@ Lands the vehicle and disarms it.
 ---
 
 ### `GET /command/rtl`
-Triggers Return-to-Launch mode (non-blocking — sets the flight mode and returns).
+Triggers Return-to-Launch. Blocks until the vehicle returns home and disarms.
 
 **Response:**
 ```json
@@ -78,6 +78,11 @@ Sets the `SIM_SPEEDUP` MAVLink parameter. Only meaningful in SITL simulated mode
 | Query param | Type | Description |
 |-------------|------|-------------|
 | `sim_factor` | float | Simulation time multiplier |
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "result": "Simulation speedup set to 5x"}
+```
 
 ---
 
@@ -389,6 +394,16 @@ Executes an uploaded script in a tmux session named `"api-script"`. Non-blocking
 - Attach live: `tmux attach -t api-script`
 
 **Errors:** 404 if script not found.
+
+---
+
+### `DELETE /mission/clear`
+Deletes all `.py` and `.sh` files from the scripts directory.
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "type": 48, "info": "Removed 2 script(s)", "removed": ["a.py", "b.sh"]}
+```
 
 ---
 

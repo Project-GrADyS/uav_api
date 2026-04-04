@@ -1,10 +1,9 @@
 # UAV API
 
-MCP server for controlling ArduPilot-compatible UAVs (QuadCopters). Exposes drone command, movement, and telemetry as MCP tools via Streamable HTTP. Supports real drones via MAVLink and simulated drones via ArduPilot SITL.
+HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports real drones via MAVLink and simulated drones via ArduPilot SITL.
 
 ## Tech Stack
 - **Python 3.10+**, FastAPI, Uvicorn, Pydantic v2
-- **MCP**: fastapi-mcp (Streamable HTTP transport at `/mcp`)
 - **MAVLink**: pymavlink, MAVProxy
 - **Async**: asyncio, aiohttp (background drain loop + GS location push)
 - **Process management**: psutil, subprocess
@@ -47,27 +46,6 @@ uav-api --port 8000 --uav_connection 127.0.0.1:17171 --connection_type udpin --s
 
 **Interactive API docs (Swagger UI):** `http://localhost:<port>/docs`
 
-**MCP endpoint:** `http://localhost:<port>/mcp`
-
-**Connect an MCP client (e.g., Claude Desktop, LangGraph):**
-```json
-{
-  "mcpServers": {
-    "uav-1": { "url": "http://localhost:8000/mcp" }
-  }
-}
-```
-
-**Multi-drone setup (one MCP server per drone, different ports/sysids):**
-```json
-{
-  "mcpServers": {
-    "uav-1": { "url": "http://localhost:8001/mcp" },
-    "uav-2": { "url": "http://localhost:8002/mcp" }
-  }
-}
-```
-
 ## Testing
 
 **Framework:** pytest + FastAPI `TestClient` (backed by httpx)
@@ -85,7 +63,6 @@ pytest tests/ -v
 **Test files:**
 | File | Covers |
 |------|--------|
-| `tests/mcp_test.py` | MCP server mounting, tool names, descriptions, endpoint count |
 | `tests/movement_test.py` | Movement router endpoints (integration test — requires SITL) |
 
 > `movement_test.py` is an integration test that runs against a real SITL instance. It uses a session-scoped fixture to start the API with `--simulated true`, so it is slower than unit tests and requires ArduPilot installed.
