@@ -437,9 +437,20 @@ Deletes all `.py` and `.sh` files from the scripts directory.
 
 ## /peripherical — Hardware Peripherals
 
-### `GET /peripherical/take_picture`
-Captures a 1280×720 image using `fswebcam` and returns it.
+### `GET /peripherical/take_photo`
+Takes a photo using a whitelisted camera CLI tool. The tool must be installed on the system.
 
-**Response:** `image/jpeg` file (`Content-Disposition: attachment; filename="image.jpg"`)
+**Query Parameters:**
 
-**Error:** Returns `{"error": "Unable to take picture"}` with status 404 if capture fails.
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `command` | `str` | *(required)* | Camera tool to use. Allowed: `fswebcam`, `rpicam-still`, `libcamera-still` |
+| `resolution` | `str` | `1280x720` | Capture resolution in `WIDTHxHEIGHT` format |
+| `capture_time` | `int` | `150` | Capture delay / warm-up in milliseconds |
+
+**Response:** `image/jpeg` file (`Content-Disposition: attachment; filename="photo.jpg"`)
+
+**Errors:**
+- `400` — disallowed command or invalid resolution format
+- `500` — capture command failed (stderr included in detail)
+- `504` — command timed out (fixed 30s limit)

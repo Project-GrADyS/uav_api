@@ -242,13 +242,35 @@ If `--script_logs` is set, stdout and stderr are saved as:
 
 ## Camera Peripheral
 
-Capture a 1280×720 JPEG image from a connected webcam (requires `fswebcam`):
+Take a photo using a whitelisted camera CLI tool. The chosen tool **must be installed** on the system:
 
-```
-GET /peripherical/take_picture
+| Tool | Install | Notes |
+|------|---------|-------|
+| `fswebcam` | `sudo apt install fswebcam` | USB webcams on Linux |
+| `rpicam-still` | Pre-installed on Raspberry Pi OS Bookworm+ | Modern Raspberry Pi camera |
+| `libcamera-still` | `sudo apt install libcamera-apps` | Generic libcamera (Pi and other boards) |
+
+**Endpoint:** `GET /peripherical/take_photo`
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `command` | *(required)* | One of: `fswebcam`, `rpicam-still`, `libcamera-still` |
+| `resolution` | `1280x720` | Capture resolution (`WIDTHxHEIGHT`) |
+| `capture_time` | `150` | Warm-up / exposure delay in milliseconds |
+
+**Examples:**
+```bash
+# USB webcam with fswebcam
+curl "http://localhost:8000/peripherical/take_photo?command=fswebcam" --output photo.jpg
+
+# Raspberry Pi camera at 1920x1080
+curl "http://localhost:8000/peripherical/take_photo?command=rpicam-still&resolution=1920x1080" --output photo.jpg
+
+# libcamera with 500ms warm-up
+curl "http://localhost:8000/peripherical/take_photo?command=libcamera-still&capture_time=500" --output photo.jpg
 ```
 
-Returns the image as `image/jpeg` (`Content-Disposition: attachment; filename="image.jpg"`).
+Returns the image as `image/jpeg` (`Content-Disposition: attachment; filename="photo.jpg"`).
 
 ---
 
@@ -1208,7 +1230,7 @@ if __name__ == "__main__":
 | `uav_api/routers/movement.py` | Endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
 | `uav_api/routers/telemetry.py` | Endpoints: GPS, NED, compass, battery, sensor status, home info |
 | `uav_api/routers/mission.py` | Endpoints: upload-script, list-scripts, execute-script |
-| `uav_api/routers/peripherical.py` | Endpoints: take_picture |
+| `uav_api/routers/peripherical.py` | Endpoints: take_photo |
 | `uav_api/classes/pos.py` | Pydantic models: `GPS_pos`, `Local_pos` |
 | `uav_api/classes/script.py` | Pydantic model: `Script` |
 | `flight_examples/` | Example client scripts and INI config files |

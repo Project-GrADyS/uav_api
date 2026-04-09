@@ -1,20 +1,77 @@
 import os
+import re
+import tempfile
+import subprocess
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 peripherical_router = APIRouter(
-    prefix = "/peripherical",
-    tags = ["peripherical"],
+    prefix="/peripherical",
+    tags=["peripherical"],
 )
 
-@peripherical_router.get("/take_picture", tags=["peripherical"])
-def take_picture():
-    os.system("fswebcam -r 1280x720 image.jpg")
-    if not os.path.exists("image.jpg"):
-        return {"error":"Unable to take picture"}, 404
-    return FileResponse(
-        path="image.jpg",
-        media_type="image/jpeg",
-        filename="image.jpg"
-    )
+ALLOWED_COMMANDS = {"fswebcam", "rpicam-still", "libcamera-still"}
+
+def _build_cmd(command: str, resolution: str, capture_time: int, output_path: str) -> list[str]:
+    """Build the capture command list for the given tool."""
+    match = re.match(r"^(\d+)x(\d+)$", resolution)
+    if not match:
+        raise ValueError(f"Invalid resolution format: {resolution}. Expected WIDTHxHEIGHT.")
+    w, h = match.group(1), match.group(2)
+
+    if command == "fswebcam":
+        cmd = ["fswebcam", "-r", resolution, "--no-banner"]
+        if capture_time > 0:
+            cmd += ["-D", str(capture_time / 1000)]
+        cmd.append(output_path)
+    elif command in ("rpicam-still", "libcamera-still"):
+        t_ms = str(capture_time) if capture_time > 0 else "1"
+        cmd = [command, "--width", w, "--height", h, "-t", t_ms, "-o", output_path]
+    else:
+        raise ValueError(f"Unknown command: {command}")
+    return cmd
+
+
+@peripherical_router.get("/take_photo", tags=["peripherical"],
+                          summary="Takes a photo using a whitelisted camera CLI tool")
+def take_photo(
+    command: str = Query(..., description="Camera tool to use. Allowed: fswebcam, rpicam-still, libcamera-still"),
+    resolution: str = Query("1280x720", description="Capture resolution (WIDTHxHEIGHT)"),
+    capture_time: int = Query(150, ge=0, description="Capture delay / warm-up in milliseconds"),
+):
+    if command not in ALLOWED_COMMANDS:
+        raise HTTPException(status_code=400,
+            detail=f"Command '{command}' is not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}")
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+    tmp_path = tmp.name
+    tmp.close()
+
+    try:
+        cmd = _build_cmd(command, resolution, capture_time, tmp_path)
+        result = subprocess.run(cmd, capture_output=True, timeout=30)
+
+        if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+            detail = result.stderr.decode(errors="replace") if result.stderr else "Command produced no output file"
+            raise HTTPException(status_code=500, detail=f"TAKE_PHOTO_FAIL: {detail}")
+
+        return FileResponse(
+            path=tmp_path,
+            media_type="image/jpeg",
+            filename="photo.jpg",
+            background=BackgroundTask(os.unlink, tmp_path),
+        )
+    except subprocess.TimeoutExpired:
+        os.unlink(tmp_path)
+        raise HTTPException(status_code=504, detail="TAKE_PHOTO_TIMEOUT: Command timed out after 30s")
+    except HTTPException:
+        raise
+    except ValueError as e:
+        os.unlink(tmp_path)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise HTTPException(status_code=500, detail=f"TAKE_PHOTO_FAIL: {e}")
