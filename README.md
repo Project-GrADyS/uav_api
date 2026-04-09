@@ -12,6 +12,44 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
 - Camera peripheral support
 - Configurable logging per component
 
+## Table of Contents
+
+- [Installation](#installation)
+  - [Prerequisites](#prerequisites)
+  - [Installing from PyPI (recommended)](#installing-from-pypi-recommended)
+  - [Installing from source (development)](#installing-from-source-development)
+- [Getting Started](#getting-started)
+  - [Running with a real drone](#running-with-a-real-drone)
+  - [Running in simulation (SITL)](#running-in-simulation-sitl)
+  - [Using a configuration file](#using-a-configuration-file)
+  - [Verifying the API](#verifying-the-api)
+- [CLI Arguments Reference](#cli-arguments-reference)
+  - [General (all modes)](#general-all-modes)
+  - [Connection (real drone)](#connection-real-drone)
+  - [Simulation only](#simulation-only)
+  - [Logging](#logging)
+- [Extra Features](#extra-features)
+  - [Gradys Ground Station Integration](#gradys-ground-station-integration)
+  - [Visual Feedback with Mission Planner](#visual-feedback-with-mission-planner)
+  - [Logging System](#logging-system)
+  - [Mission Script Management](#mission-script-management)
+  - [Camera Peripheral](#camera-peripheral)
+- [Flying through scripts](#flying-through-scripts)
+  - [Running examples](#running-examples)
+  - [Simple Takeoff and Landing](#simple-takeoff-and-landing)
+  - [NED Square](#ned-square)
+  - [NED Square (Polling)](#ned-square-polling)
+  - [Follower](#follower)
+  - [Make polygon with Go To](#make-polygon-with-go-to)
+  - [Make polygon with Drive](#make-polygon-with-drive)
+  - [Delivery Mission Simulation](#delivery-mission-simulation)
+  - [GPS-Based Follower](#gps-based-follower)
+- [Project Architecture](#project-architecture)
+  - [Module Map](#module-map)
+  - [Processes and Coroutines](#processes-and-coroutines)
+  - [Dependency Injection](#dependency-injection)
+  - [API Response Format](#api-response-format)
+
 ---
 
 # Installation
