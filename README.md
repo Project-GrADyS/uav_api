@@ -4,7 +4,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
 
 **Features:**
 - Full flight control: arm, takeoff, land, RTL, speed configuration
-- GPS and NED movement commands (fire-and-forget and blocking variants)
+- GPS and NED movement commands (fire-and-forget and blocking variants), heading control
 - Rich telemetry: GPS, NED position, compass, battery, sensor health
 - Mission scripting: upload, list, and execute `.py`/`.sh` scripts remotely
 - Gradys Ground Station integration: periodic GPS location push
@@ -1205,7 +1205,7 @@ if __name__ == "__main__":
 | `uav_api/log.py` | Logger configuration (file + console, per-component) |
 | `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ArduPilot config) |
 | `uav_api/routers/command.py` | Endpoints: arm, takeoff, land, RTL, speed, home |
-| `uav_api/routers/movement.py` | Endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs) |
+| `uav_api/routers/movement.py` | Endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
 | `uav_api/routers/telemetry.py` | Endpoints: GPS, NED, compass, battery, sensor status, home info |
 | `uav_api/routers/mission.py` | Endpoints: upload-script, list-scripts, execute-script |
 | `uav_api/routers/peripherical.py` | Endpoints: take_picture |

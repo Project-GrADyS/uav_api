@@ -1595,6 +1595,42 @@ Also, ignores heartbeats not from our target system"""
                                                             0, # yam heading (radians)
                                                             0, # yaw_rate (rad/s)
                                                         )
+    def set_heading(self, heading: float):
+        self.progress(f"Setting heading to {heading} degrees")
+        self.run_cmd(
+            mavutil.mavlink.MAV_CMD_CONDITION_YAW,
+            heading,  # p1: target angle (degrees)
+            0,        # p2: angular speed (deg/s, 0 = default)
+            1,        # p3: direction (1 = CW, -1 = CCW, 0 = shortest)
+            0,        # p4: 0 = absolute angle, 1 = relative offset
+            0, 0, 0
+        )
+
+    def set_yaw_rate(self, yaw_rate: float):
+        self.progress(f"Setting yaw rate to {yaw_rate} deg/s")
+        self.mav.mav.set_position_target_local_ned_send(
+            0,
+            self.target_system,
+            self.target_component,
+            mavutil.mavlink.MAV_FRAME_LOCAL_NED,
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_X_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_Y_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_Z_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE,
+            0, 0, 0,
+            0, 0, 0,
+            0, 0, 0,
+            0,
+            math.radians(yaw_rate),
+        )
+
     def get_ned_position(self, timeout=10):
         """Get and print LOCAL_POSITION_NED msg send by the drone.
         """

@@ -73,6 +73,22 @@ def travel_at_ned(vel: Local_velocity, uav: Copter = Depends(get_copter_instance
         raise HTTPException(status_code=500, detail=f"TRAVEL FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Travelling at NED velocity ({vel.vx}, {vel.vy}, {vel.vz})"}
 
+@movement_router.get("/set_heading", tags=["movement"], summary="Sets the copter heading to specified angle in degrees")
+def set_heading(heading: float, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
+    try:
+        uav.set_heading(heading)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SET_HEADING FAIL: {e}")
+    return {"device": "uav", "id": str(args.sysid), "result": f"Heading set to {heading} degrees"}
+
+@movement_router.get("/set_yaw_rate", tags=["movement"], summary="Spins the copter at specified yaw rate in degrees/s")
+def set_yaw_rate(yaw_rate: float, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
+    try:
+        uav.set_yaw_rate(yaw_rate)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SET_YAW_RATE FAIL: {e}")
+    return {"device": "uav", "id": str(args.sysid), "result": f"Yaw rate set to {yaw_rate} deg/s"}
+
 @movement_router.get("/stop", tags=["movement"])
 def stop(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:

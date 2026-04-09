@@ -194,6 +194,34 @@ Sets the vehicle's velocity in NED frame. Non-blocking — the vehicle continues
 
 ---
 
+### `GET /movement/set_heading?heading=<float>`
+Sets the vehicle's heading (yaw) to the specified angle in degrees. Non-blocking.
+
+| Query param | Type | Description |
+|-------------|------|-------------|
+| `heading` | float | Target heading in degrees (0–360, 0 = North, 90 = East) |
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "result": "Heading set to 90.0 degrees"}
+```
+
+---
+
+### `GET /movement/set_yaw_rate?yaw_rate=<float>`
+Spins the vehicle continuously at the specified angular speed. Positive values rotate clockwise, negative values rotate counter-clockwise. Send 0 to stop spinning. Non-blocking.
+
+| Query param | Type | Description |
+|-------------|------|-------------|
+| `yaw_rate` | float | Angular speed in degrees/s (positive = CW, negative = CCW) |
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "result": "Yaw rate set to 30.0 deg/s"}
+```
+
+---
+
 ### `GET /movement/stop`
 Stops the vehicle in place (holds current position).
 
