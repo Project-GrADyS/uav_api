@@ -1,4 +1,5 @@
 import os
+import datetime
 
 def ensure_home_subdir_exists(subdir_name):
     home_dir = os.path.expanduser("~")  # Gets the home directory path
@@ -20,6 +21,69 @@ def ensure_home_file_exists(filename, content=""):
         print(f"Created file: {file_path}")
     else:
         print(f"File already exists: {file_path}")
+
+def ensure_dev_certs(args):
+    if not args.udp or args.certfile is not None:
+        return args
+
+    home_dir = os.path.expanduser("~")
+    certs_dir = os.path.join(home_dir, "uav_api_certs")
+    cert_path = os.path.join(certs_dir, "dev-cert.pem")
+    key_path = os.path.join(certs_dir, "dev-key.pem")
+
+    if not os.path.exists(certs_dir):
+        os.makedirs(certs_dir)
+        print(f"Created directory: {certs_dir}")
+
+    if not os.path.isfile(cert_path) or not os.path.isfile(key_path):
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        import ipaddress
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "uav-api-dev"),
+        ])
+
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+            .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365))
+            .add_extension(
+                x509.SubjectAlternativeName([
+                    x509.DNSName("localhost"),
+                    x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+                    x509.IPAddress(ipaddress.IPv4Address("0.0.0.0")),
+                ]),
+                critical=False,
+            )
+            .sign(key, hashes.SHA256())
+        )
+
+        with open(key_path, "wb") as f:
+            f.write(key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.TraditionalOpenSSL,
+                serialization.NoEncryption(),
+            ))
+
+        with open(cert_path, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+        print(f"Generated self-signed dev certs in: {certs_dir}")
+    else:
+        print(f"Using existing dev certs from: {certs_dir}")
+
+    args.certfile = cert_path
+    args.keyfile = key_path
+    return args
 
 def setup(args):
 
@@ -48,5 +112,7 @@ def setup(args):
     if args.scripts_path is None:
         ensure_home_subdir_exists("uav_scripts")
         args.scripts_path = os.path.join(home_dir, "uav_scripts")
-        
+
+    args = ensure_dev_certs(args)
+
     return args
