@@ -6,7 +6,8 @@ base_url = "https://localhost:8000"
 # verify=False required for auto-generated self-signed dev certs
 session = niquests.Session(timeout=(5, 120))
 
-session.verify = "/home/fleury/uav_api_certs/dev-cert.pem"
+#session.verify = "/home/fleury/uav_api_certs/dev-cert.pem"
+session.verify = False
 # Arming vehicle
 arm_result = session.get(f"{base_url}/command/arm")
 if arm_result.status_code != 200:

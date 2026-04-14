@@ -15,6 +15,7 @@ def run_with_args(raw_args=None):
         cmd = [
             sys.executable, "-m", "hypercorn",
             "uav_api.api_app:app",
+            "--bind", f"0.0.0.0:{args.port}",
             "--quic-bind", f"0.0.0.0:{args.port}",
             "--certfile", args.certfile,
             "--keyfile", args.keyfile,

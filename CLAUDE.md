@@ -13,12 +13,12 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
 |------|---------|
 | `uav_api/copter.py` | Core vehicle abstraction — all MAVLink logic (~1850 lines) |
 | `uav_api/api_app.py` | FastAPI app + lifespan (startup/shutdown of SITL, drain loop, GS task) |
-| `uav_api/routers/` | One file per endpoint group: command, movement, telemetry |
+| `uav_api/routers/` | One file per endpoint group: command, movement, telemetry, mission, peripherical |
 | `uav_api/classes/` | Pydantic input models: `Gps_pos`, `Local_pos`, `Local_velocity` |
 | `uav_api/router_dependencies.py` | Singleton `Copter` instance + args via `Depends()` |
 | `uav_api/args.py` | CLI arg parsing; config serialized to `UAV_ARGS` env var for subprocess access |
 | `uav_api/gradys_gs.py` | Async loop that POSTs GPS location to Gradys Ground Station every second |
-| `uav_api/log.py` | Logger configuration (file + console, per-component) |
+| `uav_api/log.py` | Logger configuration (file + console, per-component); generates Hypercorn log config JSON for `--udp` mode |
 | `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ardupilot config) |
 | `flight_examples/` | Example client scripts (`takeoff_land.py`, `ned_square.py`, `follower.py`, `takeoff_land_h3.py`) |
 | `flight_examples/uavs/` | INI config files for simulated UAVs |

@@ -28,6 +28,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
   - [Connection (real drone)](#connection-real-drone)
   - [Simulation only](#simulation-only)
   - [Logging](#logging)
+  - [UDP/QUIC mode](#udpquic-mode)
 - [Extra Features](#extra-features)
   - [Gradys Ground Station Integration](#gradys-ground-station-integration)
   - [Visual Feedback with Mission Planner](#visual-feedback-with-mission-planner)
@@ -198,6 +199,45 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | `--log_path` | None | File path to write all component logs combined |
 | `--debug` | `[]` | Same component names as `--log_console` but at DEBUG verbosity |
 | `--script_logs` | None | Directory where script stdout/stderr are saved as timestamped `.log` files |
+
+## UDP/QUIC mode
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--udp` | `false` | Use Hypercorn with QUIC/HTTP3 (UDP) instead of Uvicorn (TCP) |
+| `--certfile` | None | Path to TLS certificate PEM file. Auto-generated self-signed cert if omitted. |
+| `--keyfile` | None | Path to TLS private key PEM file. Auto-generated if omitted. |
+
+QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-signed certs are auto-generated in `~/uav_api_certs/`.
+
+**Starting the API in UDP/QUIC mode:**
+
+```bash
+uav-api --udp --simulated true --ardupilot_path ~/ardupilot --port 8000 --sysid 1
+```
+
+**Consuming the API over HTTP/3 (QUIC):**
+
+Since QUIC uses UDP and TLS, clients must support HTTP/3. Install `niquests`:
+
+```bash
+pip install niquests
+```
+
+```python
+import niquests
+
+base_url = "https://localhost:8000"
+
+session = niquests.Session(verify=False)
+response = session.get(f"{base_url}/telemetry/general")
+print(response.json())
+session.close()
+```
+
+See `flight_examples/takeoff_land_h3.py` for a full working example.
+
+> Note: The API uses HTTPS (not HTTP) in UDP mode because QUIC requires TLS. The Swagger UI at `https://localhost:<port>/docs` also works — your browser may warn about the self-signed certificate.
 
 ---
 
