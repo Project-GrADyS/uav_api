@@ -1,14 +1,10 @@
-import json
 import logging
 import logging.config
-import os
 
-def _build_hypercorn_log_config(args):
-    """Build a logging dictConfig dict for Hypercorn loggers and write it to a temp JSON file.
+def build_hypercorn_log_config(args):
+    """Build a logging dictConfig dict for Hypercorn loggers.
 
-    Returns the path to the JSON file, to be passed via --log-config json:<path>.
-    This runs inside Logger.__init__ AFTER _create_logger, so it properly
-    overrides the StreamHandlers that Hypercorn sets up from CLI flags.
+    Returns the dict to be passed directly to Config.logconfig_dict.
     """
     logging_config = {
         'version': 1,
@@ -57,15 +53,7 @@ def _build_hypercorn_log_config(args):
         logging_config['loggers']['hypercorn.access']['level'] = "DEBUG"
         logging_config['loggers']['hypercorn.error']['level'] = "DEBUG"
 
-    home_dir = os.path.expanduser("~")
-    log_config_dir = os.path.join(home_dir, "uav_api_logs")
-    os.makedirs(log_config_dir, exist_ok=True)
-    log_config_path = os.path.join(log_config_dir, f"hypercorn_log_config_{args.sysid}.json")
-
-    with open(log_config_path, 'w') as f:
-        json.dump(logging_config, f)
-
-    return log_config_path
+    return logging_config
 
 def set_log_config(args):
     logging_config = {
