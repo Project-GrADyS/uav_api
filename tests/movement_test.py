@@ -9,11 +9,10 @@ Run:
 """
 
 import time
-import signal
 import pytest
 import requests
 
-from uav_api.run_api import run_with_args
+from uav_api.run_api import spawn_with_args
 
 BASE_URL = "http://localhost:8001"
 SPEEDUP = 5
@@ -62,7 +61,7 @@ def wait_for_altitude(target_alt, tolerance=2, timeout=30):
 @pytest.fixture(scope="session", autouse=True)
 def api_server():
     """Start the API server with SITL, arm, take off, yield, then tear down."""
-    proc = run_with_args([
+    proc = spawn_with_args([
         "--simulated", "true",
         "--ardupilot_path", "~/ardupilot",
         "--speedup", str(SPEEDUP),
@@ -88,12 +87,11 @@ def api_server():
         yield proc
 
     finally:
-        proc.send_signal(signal.SIGINT)
-        try:
-            proc.wait(timeout=15)
-        except Exception:
+        proc.terminate()
+        proc.join(timeout=15)
+        if proc.is_alive():
             proc.kill()
-            proc.wait(timeout=5)
+            proc.join(timeout=5)
 
 
 # ── tests (run in order, share the same SITL session) ────────────────────────

@@ -22,12 +22,14 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
   - [Running with a real drone](#running-with-a-real-drone)
   - [Running in simulation (SITL)](#running-in-simulation-sitl)
   - [Using a configuration file](#using-a-configuration-file)
+  - [Spawning programmatically](#spawning-programmatically)
   - [Verifying the API](#verifying-the-api)
 - [CLI Arguments Reference](#cli-arguments-reference)
   - [General (all modes)](#general-all-modes)
   - [Connection (real drone)](#connection-real-drone)
   - [Simulation only](#simulation-only)
   - [Logging](#logging)
+  - [UDP/QUIC mode](#udpquic-mode)
 - [Extra Features](#extra-features)
   - [Gradys Ground Station Integration](#gradys-ground-station-integration)
   - [Visual Feedback with Mission Planner](#visual-feedback-with-mission-planner)
@@ -138,6 +140,38 @@ uav-api --config /path/to/config.ini
 
 CLI arguments always override values from the config file. Example config files for single and multi-UAV setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`.
 
+## Spawning programmatically
+
+You can start the API from Python code using `spawn_with_args`, which runs the server in a background process:
+
+```python
+from uav_api.run_api import spawn_with_args
+
+# Start a simulated UAV API on port 8001
+process = spawn_with_args([
+    "--simulated", "true",
+    "--ardupilot_path", "~/ardupilot",
+    "--speedup", "5",
+    "--port", "8001",
+    "--sysid", "1",
+])
+
+# ... interact with the API at http://localhost:8001 ...
+
+# Shut down
+process.terminate()
+process.join(timeout=15)
+```
+
+`spawn_with_args` accepts the same arguments as the `uav-api` CLI and returns a `multiprocessing.Process`. For a blocking call (e.g. when building your own entry point), use `run_with_args` instead:
+
+```python
+from uav_api.run_api import run_with_args
+
+# Blocks until the server is stopped (Ctrl+C)
+run_with_args(["--port", "8000", "--sysid", "1"])
+```
+
 ## Verifying the API
 
 Open the interactive Swagger UI in your browser:
@@ -198,6 +232,45 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | `--log_path` | None | File path to write all component logs combined |
 | `--debug` | `[]` | Same component names as `--log_console` but at DEBUG verbosity |
 | `--script_logs` | None | Directory where script stdout/stderr are saved as timestamped `.log` files |
+
+## UDP/QUIC mode
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--udp` | `false` | Use Hypercorn with QUIC/HTTP3 (UDP) instead of Uvicorn (TCP) |
+| `--certfile` | None | Path to TLS certificate PEM file. Auto-generated self-signed cert if omitted. |
+| `--keyfile` | None | Path to TLS private key PEM file. Auto-generated if omitted. |
+
+QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-signed certs are auto-generated in `~/uav_api_certs/`.
+
+**Starting the API in UDP/QUIC mode:**
+
+```bash
+uav-api --udp --simulated true --ardupilot_path ~/ardupilot --port 8000 --sysid 1
+```
+
+**Consuming the API over HTTP/3 (QUIC):**
+
+Since QUIC uses UDP and TLS, clients must support HTTP/3. Install `niquests`:
+
+```bash
+pip install niquests
+```
+
+```python
+import niquests
+
+base_url = "https://localhost:8000"
+
+session = niquests.Session(verify=False)
+response = session.get(f"{base_url}/telemetry/general")
+print(response.json())
+session.close()
+```
+
+See `flight_examples/takeoff_land_h3.py` for a full working example.
+
+> Note: The API uses HTTPS (not HTTP) in UDP mode because QUIC requires TLS. The Swagger UI at `https://localhost:<port>/docs` also works — your browser may warn about the self-signed certificate.
 
 ---
 

@@ -35,6 +35,7 @@ def parse_args(raw_args=None):
     parse_api(parser)
     parse_logs(parser)
     parse_simulated(parser)
+    parse_udp(parser)
     args = parser.parse_args(raw_args)
 
     if args.config:
@@ -204,4 +205,28 @@ def parse_logs(logs_parser):
         dest="script_logs",
         default=None,
         help="Saves script executed by mission route out and err files to the provided path"
+    )
+
+def parse_udp(udp_parser):
+
+    udp_parser.add_argument(
+        '--udp',
+        dest='udp',
+        action='store_true',
+        default=False,
+        help='Use Hypercorn with QUIC/HTTP3 (UDP) instead of Uvicorn (TCP)'
+    )
+
+    udp_parser.add_argument(
+        '--certfile',
+        dest='certfile',
+        default=None,
+        help='Path to TLS certificate PEM file (for --udp mode). Auto-generated if omitted.'
+    )
+
+    udp_parser.add_argument(
+        '--keyfile',
+        dest='keyfile',
+        default=None,
+        help='Path to TLS private key PEM file (for --udp mode). Auto-generated if omitted.'
     )

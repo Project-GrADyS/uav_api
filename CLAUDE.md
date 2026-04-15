@@ -3,24 +3,24 @@
 HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports real drones via MAVLink and simulated drones via ArduPilot SITL.
 
 ## Tech Stack
-- **Python 3.10+**, FastAPI, Uvicorn, Pydantic v2
+- **Python 3.10+**, FastAPI, Uvicorn (default TCP) / Hypercorn (optional QUIC/UDP via `--udp`), Pydantic v2
 - **MAVLink**: pymavlink, MAVProxy
 - **Async**: asyncio, aiohttp (background drain loop + GS location push)
-- **Process management**: psutil, subprocess
+- **Process management**: psutil, multiprocessing
 
 ## Project Structure
 | Path | Purpose |
 |------|---------|
 | `uav_api/copter.py` | Core vehicle abstraction — all MAVLink logic (~1850 lines) |
 | `uav_api/api_app.py` | FastAPI app + lifespan (startup/shutdown of SITL, drain loop, GS task) |
-| `uav_api/routers/` | One file per endpoint group: command, movement, telemetry |
+| `uav_api/routers/` | One file per endpoint group: command, movement, telemetry, mission, peripherical |
 | `uav_api/classes/` | Pydantic input models: `Gps_pos`, `Local_pos`, `Local_velocity` |
 | `uav_api/router_dependencies.py` | Singleton `Copter` instance + args via `Depends()` |
-| `uav_api/args.py` | CLI arg parsing; config serialized to `UAV_ARGS` env var for subprocess access |
+| `uav_api/args.py` | CLI arg parsing; config serialized to `UAV_ARGS` env var for app module access |
 | `uav_api/gradys_gs.py` | Async loop that POSTs GPS location to Gradys Ground Station every second |
-| `uav_api/log.py` | Logger configuration (file + console, per-component) |
+| `uav_api/log.py` | Logger configuration (file + console, per-component); builds Hypercorn log config dict for `--udp` mode |
 | `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ardupilot config) |
-| `flight_examples/` | Example client scripts (`takeoff_land.py`, `ned_square.py`, `follower.py`) |
+| `flight_examples/` | Example client scripts (`takeoff_land.py`, `ned_square.py`, `follower.py`, `takeoff_land_h3.py`) |
 | `flight_examples/uavs/` | INI config files for simulated UAVs |
 
 ## Essential Commands
@@ -107,8 +107,17 @@ All arguments defined in `uav_api/args.py`. Can also be provided via INI config 
 
 > In simulated mode, SITL binds the address set by `--uav_connection`. The API then connects to it (default `udpin`).
 
+### UDP/QUIC mode (`--udp`)
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--udp` | `False` | Use Hypercorn with QUIC/HTTP3 (UDP) instead of Uvicorn (TCP) |
+| `--certfile` | None | Path to TLS certificate PEM. Auto-generated self-signed cert if omitted. |
+| `--keyfile` | None | Path to TLS private key PEM. Auto-generated if omitted. |
+
+> QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-signed certs are auto-generated in `~/uav_api_certs/`.
+
 ## Key Entry Points
-- CLI entry: `uav_api/run_api.py` → starts uvicorn
+- CLI entry: `uav_api/run_api.py` → starts uvicorn (default) or hypercorn (`--udp`)
 - App definition: `uav_api/api_app.py:57` (lifespan) and `:126` (app + router registration)
 - Copter class: `uav_api/copter.py:110`
 - Dependency injection: `uav_api/router_dependencies.py:8`
