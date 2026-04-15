@@ -22,6 +22,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
   - [Running with a real drone](#running-with-a-real-drone)
   - [Running in simulation (SITL)](#running-in-simulation-sitl)
   - [Using a configuration file](#using-a-configuration-file)
+  - [Spawning programmatically](#spawning-programmatically)
   - [Verifying the API](#verifying-the-api)
 - [CLI Arguments Reference](#cli-arguments-reference)
   - [General (all modes)](#general-all-modes)
@@ -138,6 +139,38 @@ uav-api --config /path/to/config.ini
 ```
 
 CLI arguments always override values from the config file. Example config files for single and multi-UAV setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`.
+
+## Spawning programmatically
+
+You can start the API from Python code using `spawn_with_args`, which runs the server in a background process:
+
+```python
+from uav_api.run_api import spawn_with_args
+
+# Start a simulated UAV API on port 8001
+process = spawn_with_args([
+    "--simulated", "true",
+    "--ardupilot_path", "~/ardupilot",
+    "--speedup", "5",
+    "--port", "8001",
+    "--sysid", "1",
+])
+
+# ... interact with the API at http://localhost:8001 ...
+
+# Shut down
+process.terminate()
+process.join(timeout=15)
+```
+
+`spawn_with_args` accepts the same arguments as the `uav-api` CLI and returns a `multiprocessing.Process`. For a blocking call (e.g. when building your own entry point), use `run_with_args` instead:
+
+```python
+from uav_api.run_api import run_with_args
+
+# Blocks until the server is stopped (Ctrl+C)
+run_with_args(["--port", "8000", "--sysid", "1"])
+```
 
 ## Verifying the API
 

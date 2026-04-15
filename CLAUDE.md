@@ -6,7 +6,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
 - **Python 3.10+**, FastAPI, Uvicorn (default TCP) / Hypercorn (optional QUIC/UDP via `--udp`), Pydantic v2
 - **MAVLink**: pymavlink, MAVProxy
 - **Async**: asyncio, aiohttp (background drain loop + GS location push)
-- **Process management**: psutil, subprocess
+- **Process management**: psutil, multiprocessing
 
 ## Project Structure
 | Path | Purpose |
@@ -16,9 +16,9 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
 | `uav_api/routers/` | One file per endpoint group: command, movement, telemetry, mission, peripherical |
 | `uav_api/classes/` | Pydantic input models: `Gps_pos`, `Local_pos`, `Local_velocity` |
 | `uav_api/router_dependencies.py` | Singleton `Copter` instance + args via `Depends()` |
-| `uav_api/args.py` | CLI arg parsing; config serialized to `UAV_ARGS` env var for subprocess access |
+| `uav_api/args.py` | CLI arg parsing; config serialized to `UAV_ARGS` env var for app module access |
 | `uav_api/gradys_gs.py` | Async loop that POSTs GPS location to Gradys Ground Station every second |
-| `uav_api/log.py` | Logger configuration (file + console, per-component); generates Hypercorn log config JSON for `--udp` mode |
+| `uav_api/log.py` | Logger configuration (file + console, per-component); builds Hypercorn log config dict for `--udp` mode |
 | `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ardupilot config) |
 | `flight_examples/` | Example client scripts (`takeoff_land.py`, `ned_square.py`, `follower.py`, `takeoff_land_h3.py`) |
 | `flight_examples/uavs/` | INI config files for simulated UAVs |

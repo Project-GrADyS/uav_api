@@ -64,7 +64,7 @@ Movement commands come in pairs. The blocking (`_wait`) variant issues the comma
 
 **Pattern**: `uav_api/args.py:17-18`
 
-The CLI `Namespace` is serialized to JSON and stored in the `UAV_ARGS` env var before uvicorn forks. The uvicorn subprocess reads it back via `read_args_from_env()`. This lets the FastAPI app and all routers access config without re-parsing CLI args.
+The CLI `Namespace` is serialized to JSON and stored in the `UAV_ARGS` env var before the ASGI server starts. Since both uvicorn and hypercorn are invoked programmatically with the app as an import path string, the app module reads the env var back via `read_args_from_env()` at import time. This lets the FastAPI app and all routers access config without re-parsing CLI args.
 
 ## Naming Conventions in `copter.py`
 
