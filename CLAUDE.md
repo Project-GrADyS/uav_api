@@ -20,7 +20,8 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
 | `uav_api/gradys_gs.py` | Async loop that POSTs GPS location to Gradys Ground Station every second |
 | `uav_api/log.py` | Logger configuration (file + console, per-component); builds Hypercorn log config dict for `--udp` mode |
 | `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ardupilot config) |
-| `flight_examples/` | Example client scripts (`takeoff_land.py`, `ned_square.py`, `follower.py`, `takeoff_land_h3.py`) |
+| `flight_examples/` | Example client scripts — each in its own subdirectory, sharing `flight_helpers.py` |
+| `flight_examples/flight_helpers.py` | Shared helper module (session, send_command, home capture, graceful shutdown) |
 | `flight_examples/uavs/` | INI config files for simulated UAVs |
 
 ## Essential Commands
