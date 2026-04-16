@@ -14,13 +14,14 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
 | `uav_api/copter.py` | Core vehicle abstraction — all MAVLink logic (~1850 lines) |
 | `uav_api/api_app.py` | FastAPI app + lifespan (startup/shutdown of SITL, drain loop, GS task) |
 | `uav_api/routers/` | One file per endpoint group: command, movement, telemetry, mission, peripherical |
-| `uav_api/classes/` | Pydantic input models: `Gps_pos`, `Local_pos`, `Local_velocity` |
+| `uav_api/classes/` | Pydantic input models: `Gps_pos`, `Local_pos`, `Local_velocity`, `Servo_output` |
 | `uav_api/router_dependencies.py` | Singleton `Copter` instance + args via `Depends()` |
 | `uav_api/args.py` | CLI arg parsing; config serialized to `UAV_ARGS` env var for app module access |
 | `uav_api/gradys_gs.py` | Async loop that POSTs GPS location to Gradys Ground Station every second |
 | `uav_api/log.py` | Logger configuration (file + console, per-component); builds Hypercorn log config dict for `--udp` mode |
 | `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ardupilot config) |
-| `flight_examples/` | Example client scripts (`takeoff_land.py`, `ned_square.py`, `follower.py`, `takeoff_land_h3.py`) |
+| `flight_examples/` | Example client scripts — each in its own subdirectory, sharing `flight_helpers.py` |
+| `flight_examples/flight_helpers.py` | Shared helper module (session, send_command, home capture, graceful shutdown) |
 | `flight_examples/uavs/` | INI config files for simulated UAVs |
 
 ## Essential Commands
@@ -63,16 +64,15 @@ pytest tests/ -v
 **Test files:**
 | File | Covers |
 |------|--------|
-| `tests/movement_test.py` | Movement router endpoints (integration test — requires SITL) |
+| `tests/command_test.py` | Command router endpoints (arm, takeoff, land, RTL, speeds, set_home) |
+| `tests/movement_test.py` | Movement router endpoints (go_to_ned, drive, go_to_gps, travel_at_ned, stop) |
+| `tests/telemetry_test.py` | All telemetry endpoints (general, gps, ned, compass, battery, etc.) |
+| `tests/mission_test.py` | Mission script management (upload, list, execute, clear) |
+| `tests/peripherical_test.py` | Peripherical endpoints (take_photo validation, servo_output) |
 
-> `movement_test.py` is an integration test that runs against a real SITL instance. It uses a session-scoped fixture to start the API with `--simulated true`, so it is slower than unit tests and requires ArduPilot installed.
+> All tests are **integration tests** that run against a live SITL instance. A session-scoped fixture in `conftest.py` spawns the API with `--simulated true`, arms and takes off before yielding to tests. Requires ArduPilot installed and `xterm` on PATH.
 
-**How tests are isolated:**
-- Each test gets a fresh temporary directory (`pytest`'s `tmp_path` fixture) for scripts and logs — no real `~/uav_scripts` is touched.
-- The `get_args` FastAPI dependency is overridden per test via `app.dependency_overrides`, injecting a controlled `argparse.Namespace`.
-- `subprocess.run` (tmux calls) is patched with `unittest.mock.patch` so no real tmux session is created.
-
-**Adding new tests:** create a new `tests/<router>_test.py`, build a `TestClient` with `app.dependency_overrides[get_args] = lambda: <your_namespace>`, and use `tmp_path` for any filesystem isolation needed.
+**Adding new tests:** create a new `tests/<router>_test.py`, import helpers from `conftest` (`get`, `post`, `delete`, `wait_for_altitude`), and write tests that call the live API over HTTP. No mocks or `TestClient` — always test against the real SITL server. See `.claude/docs/tests.md` for full details.
 
 ## CLI Arguments
 All arguments defined in `uav_api/args.py`. Can also be provided via INI config file with `--config <path>`. Config file values are overridden by CLI args.

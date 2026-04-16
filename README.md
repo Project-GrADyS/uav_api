@@ -9,7 +9,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
 - Mission scripting: upload, list, and execute `.py`/`.sh` scripts remotely
 - Gradys Ground Station integration: periodic GPS location push
 - Visual feedback via Mission Planner or any MAVLink GCS
-- Camera peripheral support
+- Hardware peripherals: camera capture, servo PWM output
 - Configurable logging per component
 
 ## Table of Contents
@@ -36,6 +36,12 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
   - [Logging System](#logging-system)
   - [Mission Script Management](#mission-script-management)
   - [Camera Peripheral](#camera-peripheral)
+  - [Servo Output](#servo-output)
+- [Project Architecture](#project-architecture)
+  - [Module Map](#module-map)
+  - [Processes and Coroutines](#processes-and-coroutines)
+  - [Dependency Injection](#dependency-injection)
+  - [API Response Format](#api-response-format)
 - [Flying through scripts](#flying-through-scripts)
   - [Running examples](#running-examples)
   - [Simple Takeoff and Landing](#simple-takeoff-and-landing)
@@ -46,11 +52,6 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
   - [Make polygon with Drive](#make-polygon-with-drive)
   - [Delivery Mission Simulation](#delivery-mission-simulation)
   - [GPS-Based Follower](#gps-based-follower)
-- [Project Architecture](#project-architecture)
-  - [Module Map](#module-map)
-  - [Processes and Coroutines](#processes-and-coroutines)
-  - [Dependency Injection](#dependency-injection)
-  - [API Response Format](#api-response-format)
 
 ---
 
@@ -268,7 +269,7 @@ print(response.json())
 session.close()
 ```
 
-See `flight_examples/takeoff_land_h3.py` for a full working example.
+See the flight examples section below — all examples support HTTP/3 via the `--h3` flag.
 
 > Note: The API uses HTTPS (not HTTP) in UDP mode because QUIC requires TLS. The Swagger UI at `https://localhost:<port>/docs` also works — your browser may warn about the self-signed certificate.
 
@@ -383,943 +384,30 @@ curl "http://localhost:8000/peripherical/take_photo?command=libcamera-still&capt
 
 Returns the image as `image/jpeg` (`Content-Disposition: attachment; filename="photo.jpg"`).
 
----
+## Servo Output
 
-# Flying through scripts
-One of the perks of using UAV API is being aple to quickly write scripts that control drone movement. Here are some examples
-## Running examples
-To run the following examples run the following command inside of the `flight_examples` directory:
+Send a PWM signal to a servo motor connected to one of the flight controller's actuator ports. Uses the MAVLink `DO_SET_SERVO` command.
 
-  `uav-api --config ./uav_1.ini`
+**Endpoint:** `POST /peripherical/servo_output`
 
-Note that this configuration file contains default values for parameters, change the values such that it matches your envinronment. You can also use your own configuration file or start the api through arguments.
+**Request body:**
 
-Once the api is up and running, run one of the examples bellow in a new terminal instance.
+| Field | Type | Description |
+|-------|------|-------------|
+| `channel` | int | Servo channel (1-based, matches the flight controller actuator port) |
+| `pwm` | int | PWM value in microseconds (typically 1000–2000) |
 
-## Simple Takeoff and Landing
-This file is located at `uav_api/flight_examples/takeoff_land.py`
-```python
-import requests
-base_url = "http://localhost:8000"
-
-# Arming vehicle
-arm_result = requests.get(f"{base_url}/command/arm")
-if arm_result.status_code != 200:
-    print(f"Arm command fail. status_code={arm_result.status_code}")
-    exit()
-print("Vehicle armed.")
-
-# Taking off
-params = {"alt": 30}
-takeoff_result = requests.get(f"{base_url}/command/takeoff", params=params)
-if takeoff_result.status_code != 200:
-    print(f"Take off command fail. status_code={takeoff_result.status_code}")
-    exit()
-print("Vehicle took off")
-
-# Landing...
-land_result = requests.get(f"{base_url}/command/land")
-if land_result.status_code != 200:
-    print(f"Land command fail. status_code={land_result.status_code}")
-    exit()
-print("Vehicle landed.")
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/peripherical/servo_output" \
+  -H "Content-Type: application/json" \
+  -d '{"channel": 9, "pwm": 1500}'
 ```
 
-## NED Square
-In this example the uav will move following a square with 100 meters side. This file is located at `flight_examples/ned_square`.
-```python
-import requests
-base_url = "http://localhost:8000"
-
-# Arming vehicle
-arm_result = requests.get(f"{base_url}/command/arm")
-if arm_result.status_code != 200:
-    print(f"Arm command fail. status_code={arm_result.status_code}")
-    exit()
-print("Vehicle armed.")
-
-# Taking off
-params = {"alt": 30}
-takeoff_result = requests.get(f"{base_url}/command/takeoff", params=params)
-if takeoff_result.status_code != 200:
-    print(f"Take off command fail. status_code={takeoff_result.status_code}")
-    exit()
-print("Vehicle took off")
-
-square_points = [
-    (100, 100, -50),
-    (100, -100, -50),
-    (-100, -100, -50),
-    (-100, 100, -50)
-]
-
-# Moving
-for point in square_points:
-    point_data = {
-        "x": point[0],
-        "y": point[1],
-        "z": point[2]
-    }
-    point_result = requests.post(f"{base_url}/movement/go_to_ned_wait", json=point_data)
-    if point_result.status_code != 200:
-        print(f"Go_to_ned_wait command fail. status_code={point_result.status_code} point={point}")
-        exit()
-    print(f"Vehicle at ({point[0]}, {point[1]}, {point[2]})")
-
-# Returning to launch
-rtl_result = requests.get(f"{base_url}/command/rtl")
-if rtl_result.status_code != 200:
-    print(f"RTL command fail. status_code={rtl_result.status_code}")
-    exit()
-print("Vehicle landed at launch.")
+**Response:**
+```json
+{"device": "uav", "id": "1", "result": "Servo 9 set to 1500 PWM"}
 ```
-
-## NED Square (Polling)
-This example does the same thing as the last one but this time instead of using the `go_to_ned_wait` endpoint we will take a polling aproach using `go_to_ned`. While more verbose, this way of verifying position allows your program to do other things while the uav has not arrived to the specified location. This file is located at `flight_examples/ned_square_polling.py`.
-```python
-import requests
-import time
-import math
-
-base_url = "http://localhost:8000"
-
-def euclidean_distance(point1, point2):
-    return math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2 + (point1[2] - point2[2])**2)
-
-def wait_for_point(point, max_error, timeout):
-    start = time.time()
-    while time.time() < start + timeout:
-        ned_result = requests.get(f"{base_url}/telemetry/ned")
-        if ned_result.status_code != 200:
-            print(f"Ned telemetry fail. status_code={ned_result.status_code}")
-            exit()
-        ned_pos = ned_result.json()["info"]["position"]
-        print(ned_pos)
-        ned_point = (ned_pos["x"], ned_pos["y"], ned_pos["z"])
-        distance = euclidean_distance(point, ned_point)
-        if distance < max_error:
-            return True
-    return False
-
-
-# Arming vehicle
-arm_result = requests.get(f"{base_url}/command/arm")
-if arm_result.status_code != 200:
-    print(f"Arm command fail. status_code={arm_result.status_code}")
-    exit()
-print("Vehicle armed.")
-
-# Taking off
-params = {"alt": 30}
-takeoff_result = requests.get(f"{base_url}/command/takeoff", params=params)
-if takeoff_result.status_code != 200:
-    print(f"Take off command fail. status_code={takeoff_result.status_code}")
-    exit()
-print("Vehicle took off")
-
-square_points = [
-    (100, 100, -50),
-    (100, -100, -50),
-    (-100, -100, -50),
-    (-100, 100, -50)
-]
-
-# Moving
-for point in square_points:
-    point_data = {
-        "x": point[0],
-        "y": point[1],
-        "z": point[2]
-    }
-    point_result = requests.post(f"{base_url}/movement/go_to_ned", json=point_data)
-    if point_result.status_code != 200:
-        print(f"Go_to_ned command fail. status_code={point_result.status_code} point={point}")
-        exit()
-
-    arrived = wait_for_point(point, max_error=3, timeout=60)
-    if not arrived:
-        print(f"Error while going to point {point}")
-        exit()
-    print(f"Vehicle at ({point[0]}, {point[1]}, {point[2]})")
-
-# Returning to launch
-rtl_result = requests.get(f"{base_url}/command/rtl")
-if rtl_result.status_code != 200:
-    print(f"RTL command fail. status_code={rtl_result.status_code}")
-    exit()
-print("Vehicle landed at launch.")
-```
-
-## Follower
-In this example one UAV will perform a square flight (shown previously) while another UAV follows it by consuming the leader API.
-To run this example start 2 different uav-api process with different ports and sysid. Now start the square script using the first UAV port number, then start the follower script (located at `flight_examples/follower.py`) with the port number of the second UAV.
-```python
-import requests
-from time import sleep, time
-
-base_url = "http://localhost:8001"
-leader_url = "http://localhost:8000"
-# Arming vehicle
-arm_result = requests.get(f"{base_url}/command/arm")
-if arm_result.status_code != 200:
-    print(f"Arm command fail. status_code={arm_result.status_code}")
-    exit()
-print("Vehicle armed.")
-
-# Taking off
-params = {"alt": 20}
-takeoff_result = requests.get(f"{base_url}/command/takeoff", params=params)
-if takeoff_result.status_code != 200:
-    print(f"Take off command fail. status_code={takeoff_result.status_code}")
-    exit()
-print("Vehicle took off")
-
-# Follow leader for 30 seconds
-start_time = time()
-current_time = time()
-while (current_time - start_time) <= 30:
-    leader_telemetry_result = requests.get(f"{leader_url}/telemetry/ned")
-    if leader_telemetry_result.status_code != 200:
-        print(f"Leader telemetry fail. status_code={leader_telemetry_result.status_code}")
-        exit()
-    leader_pos = leader_telemetry_result.json()["info"]["position"]
-
-    print("Got leader telemetry.")
-
-    movement_data = {
-        "x": leader_pos["x"] + 5,
-        "y": leader_pos["y"] + 5,
-        "z": -20
-    }
-    movement_result = requests.post(f"{base_url}/movement/go_to_ned", json=movement_data)
-    if movement_result.status_code != 200:
-        print(f"Follower go to ({movement_data['x']}, {movement_data['y']}, {movement_data['z']}) failed. status_code={movement_result.status_code}")
-        exit()
-
-    print(f"Follower going to ({movement_data['x']}, {movement_data['y']}, {movement_data['z']}).")
-
-    sleep(2)
-    current_time = time()
-
-# Return to launch
-print("Returning to launch...")
-rtl_result = requests.get(f"{base_url}/command/rtl")
-if rtl_result.status_code != 200:
-    print(f"RTL command fail. status_code={rtl_result.status_code}")
-    exit()
-
-print("Landed at launch")
-```
-
-## Make polygon with Go To
-
-This example raises the drone to a height defined by the user and then, using the endpoint `go_to_ned_wait`, takes the drone to the vertices of regular polygons also to be defined by the user. These polygons have their center located at the point where the drone was raised and are always made vertically. Whenever a polygon is finished, the drone returns to the center before starting the next one.
-The algorithm that maps the polygon points is found in the `make_polygon_points` function and works by inscribing a polygon with `s` vertices inside a circle of radius `r` and the NED coordinates of the center defined as `offset`. Since the polygon is inscribed, we know that its vertices are located on the perimeter of the circle, and since we also know that the polygon is regular, the vertices are equidistant, so we can find the angular distance of each vertex from $\frac{2\pi}{n}$. Now, numbering each vertex `v` from $v_{0}=0$ to $v_{n}=s-1$, we can find the angle of each one using the function:  
-
-$$\theta_{i}=v_{i}\frac{2\pi}{n}$$
-
-Finally, knowing the angle of the vertices, the coordinates of the center, and knowing that the polygon must be drawn vertically, we can define the NED coordinates of the vertices as:  
-
-$$x_{i}=\sin(v_{i}\frac{2\pi}{n})+x_{offset}$$
-$$y_{i}=y_{offset}$$
-$$z_{i}=-\cos(v_{i}\frac{2\pi}{n})+z_{offset}$$
-
-To use the example, the user must define the desired polygons using the `--sides` parameter, inserting the number of vertices of the polygons, the radius of the circle in meters using the `--radius` parameter, and the height at which the center of the polygon should be in meters using the `--height` parameter. So, for example, if the user wants to create a triangle, a square, and a pentagon, inserted in a circle with a radius of 3 meters and a center 4 meters from the ground, the command should be:  
-
-`python go_to_polygon.py --sides 3 4 5 --radius 3 --height 4`  
-  
-This file is located at `flight_examples/polygon/go_to_polygon.py`.
-
-```python
-import requests
-import math
-from time import sleep
-import argparse
-base_url = "http://localhost:8000"
-
-SLEEP_TIME = 5
-
-def make_polygon_points(r, s, offset):
-    points = []
-    for v in range(s):
-        point = {
-            "x": r*math.sin(v*2*math.pi/s) + offset["x"],
-            "y": offset["y"],
-            "z": -(r*math.cos(v*2*math.pi/s)) + offset["z"]
-        }
-        print(f"polygon point {v}: {point}")
-        points.append(point)
-    return(points)
-
-# Get the user's arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--sides', type=int, nargs='+', required=True)
-parser.add_argument('--radius', type=int, required=True)
-parser.add_argument('--height', type=int, required=True)
-args = parser.parse_args()
-
-# Ensures that the user defines a valid regular polygon
-if 1 in args.sides or 2 in args.sides:
-    print(f"Error: Polygon must have more than two sides!")
-    exit()
-
-# Failsafe: Ensure that the radius is smaller than the height of the perimeter's center
-if args.radius >= args.height:
-    print(f"Error: height vale must be higher then the radius value!")
-    exit()
-
-# Arming vehicle
-arm_result = requests.get(f"{base_url}/command/arm")
-if arm_result.status_code != 200:
-    print(f"Arm command fail. status_code={arm_result.status_code}")
-    exit()
-print("Vehicle armed.")
-
-# Get the NED coordinates, from telemetry, of the initial position with the vehicle still on the ground
-initial_result = requests.get(f"{base_url}/telemetry/ned")
-if initial_result.status_code != 200:
-    print(f"Ned telemetry fail. status_code={initial_result.status_code}")
-    exit()
-initial_pos = initial_result.json()["info"]["position"]
-print(f"Initial point: {initial_pos}")
-
-# Taking off
-params = {"alt": args.height}
-takeoff_result = requests.get(f"{base_url}/command/takeoff", params=params)
-if takeoff_result.status_code != 200:
-    print(f"Take off command fail. status_code={takeoff_result.status_code}")
-    exit()
-print("Vehicle took off")
-
-#sleep ensures the vehicle has time to reach its desired position
-sleep(SLEEP_TIME)
-
-# Get the NED coordinates, from telemetry, of the center of the polygons
-center_result = requests.get(f"{base_url}/telemetry/ned")
-if center_result.status_code != 200:
-    print(f"Ned telemetry fail. status_code={center_result.status_code}")
-    exit()
-center_pos = center_result.json()["info"]["position"]
-print(f"center point: {center_pos}")
-
-# Failsafe: Ensures the drone has reached the desired altitude, including a margin of error, if not it will land
-if abs(center_pos["z"]-initial_pos["z"]) >= args.height+2 or abs(center_pos["z"]-initial_pos["z"]) <= args.height-2:
-        print(f"Error: Vehicle did not reach the desired height.")
-        land_result = requests.get(f"{base_url}/command/land")
-        if land_result.status_code != 200:
-            print(f"Land command fail. status_code={land_result.status_code}")
-            exit()
-        print("Vehicle landed.")
-        exit()
-
-polygon_list = args.sides
-for s in polygon_list:
-    print(f"\n ---polygon {s}---------------------------------- \n")
-
-    # For each polygon gets the NED coordinates of the vertices
-    polygon_points = make_polygon_points(args.radius, s, center_pos)
-        
-    for point in polygon_points:
-        # For each vertex moves the vehicle to its coordinate using go_to_ned_wait
-        point_result = requests.post(f"{base_url}/movement/go_to_ned_wait", json=point)
-        if point_result.status_code != 200:
-            print(f"Go_to_ned_wait command fail. status_code={point_result.status_code} point={point}")
-            exit()
-        print(f"\nGo to point: {point})")
-
-        #sleep ensures the vehicle has time to reach its desired position
-        sleep(SLEEP_TIME)
-
-        # Get the NED coordinates, from telemetry, of the vertex for better user visualization and debugging
-        tele_ned_result = requests.get(f"{base_url}/telemetry/ned")
-        if tele_ned_result.status_code != 200:
-            print(f"Ned telemetry fail. status_code={tele_ned_result.status_code}")
-            exit()
-        tele_ned_pos = tele_ned_result.json()["info"]["position"]
-        print(f"Vehicle at {tele_ned_pos})")
-
-    # After completing the polygon, return the vehicle to the center using go_to_ned_wait
-    point_result = requests.post(f"{base_url}/movement/go_to_ned_wait", json=center_pos)
-    if point_result.status_code != 200:
-        print(f"Go_to_ned_wait command fail. status_code={point_result.status_code} point={center_pos}")
-        exit()
-    print(f"\nVehicle going back to the center")
-
-    #sleep ensures the vehicle has time to reach its desired position
-    sleep(SLEEP_TIME)
-    
-    print(f"Vehicle at the center")
-
-# Landing
-land_result = requests.get(f"{base_url}/command/land")
-if land_result.status_code != 200:
-    print(f"Land command fail. status_code={land_result.status_code}")
-    exit()
-print("\nVehicle landed.")
-
-```
-
-## Make polygon with Drive
-
-This example works the same way as the last one with one change, now we will use the `drive_wait` endpoint to take the drone to the vertices of the polygons. For this, the `make_polygon_points` function is replaced by the `make_polygon_trajectory` function. This new function also works by inscribing a polygon of `n` vertices inside a circle of radius `r`, but we don't need the NED coordinates of the circle's center. The same definition for the vertex angles will also be used: $\theta_{i}=v_{i}\frac{2\pi}{n}$.  
-Instead of defining the coordinates of the vertices, we will define vectors, still in NED, that take the drone to the vertices. For the first step, the drone must be taken from the center of the polygon to the first vertex, knowing that $v_{0}=0$, the vector must be:
-
-$$x_{0}=\sin(v_{0}\frac{2\pi}{n})=0$$
-$$y_{0}=0$$
-$$z_{0}=-\cos(v_{0}\frac{2\pi}{n})=-1$$
-
-For the following steps, since the drone is no longer at the center of the polygon, the vector that takes the drone from the center to the desired position must be subtracted by the vector that takes the drone from the center to its current position. This way, the trajectory vector of next points is obtained as follows:
-
-$$x_{i}=\sin(v_{i}\frac{2\pi}{n}) - \sin(v_{i-1}\frac{2\pi}{n})$$
-$$y_{i}=0$$
-$$z_{i}=-(\cos(v_{i}\frac{2\pi}{n}) - \cos(v_{i-1}\frac{2\pi}{n}))$$
-
-To use this example, the user must define the same parameters `--sides`, `--radius`, and `--height` as demonstrated in the previous example. This file is located at `flight_examples/polygon/drive_polygon.py`.
-
-```python
-import requests
-import math
-from time import sleep
-import argparse
-base_url = "http://localhost:8000"
-
-SLEEP_TIME = 5
-
-def make_polygon_trajectory(r, l):
-    vectors = []
-    for n in range(l):
-        if n == 0:
-            vector = {
-                "x": 0,
-                "y": 0,
-                "z": -1
-            }
-        else:
-            vector = {
-                "x": round(r*math.sin(n*2*math.pi/l) - r*math.sin((n-1)*2*math.pi/l)),
-                "y": 0,
-                "z": -(round(r*math.cos(n*2*math.pi/l) - r*math.cos((n-1)*2*math.pi/l)))
-            }
-        print(f"polygon vector {n}: {vector}")
-        vectors.append(vector)
-
-    return(vectors)
-
-# Get the user's arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--sides', type=int, nargs='+', required=True)
-parser.add_argument('--radius', type=int, required=True)
-parser.add_argument('--height', type=int, required=True)
-args = parser.parse_args()
-
-# Ensures that the user defines a valid regular polygon
-if 1 in args.sides or 2 in args.sides:
-    print(f"Error: Polygon must have more than two sides!")
-    exit()
-
-# Failsafe: Ensure that the radius is smaller than the height of the perimeter's center
-if args.radius >= args.height:
-    print(f"Error: height vale must be higher then the radius value!")
-    exit()
-
-# Arming vehicle
-arm_result = requests.get(f"{base_url}/command/arm")
-if arm_result.status_code != 200:
-    print(f"Arm command fail. status_code={arm_result.status_code}")
-    exit()
-print("Vehicle armed.")
-
-# Get the NED coordinates, from telemetry, of the initial position with the vehicle still on the ground
-initial_result = requests.get(f"{base_url}/telemetry/ned")
-if initial_result.status_code != 200:
-    print(f"Ned telemetry fail. status_code={initial_result.status_code}")
-    exit()
-initial_pos = initial_result.json()["info"]["position"]
-print(f"Initial point: {initial_pos}")
-
-# Taking off
-params = {"alt": args.height}
-takeoff_result = requests.get(f"{base_url}/command/takeoff", params=params)
-if takeoff_result.status_code != 200:
-    print(f"Take off command fail. status_code={takeoff_result.status_code}")
-    exit()
-print("Vehicle took off")
-
-#sleep ensures the vehicle has time to reach its desired position
-sleep(SLEEP_TIME)
-
-# Get the NED coordinates, from telemetry, of the center of the polygons
-center_result = requests.get(f"{base_url}/telemetry/ned")
-if center_result.status_code != 200:
-    print(f"Ned telemetry fail. status_code={center_result.status_code}")
-    exit()
-center_pos = center_result.json()["info"]["position"]
-print(f"center point: {center_pos}")
-
-# Failsafe: Ensures the drone has reached the desired altitude, including a margin of error, if not it will land
-if abs(center_pos["z"]-initial_pos["z"]) >= args.height+2 or abs(center_pos["z"]-initial_pos["z"]) <= args.height-2:
-        print(f"Error: Vehicle did not reach the desired height.")
-        land_result = requests.get(f"{base_url}/command/land")
-        if land_result.status_code != 200:
-            print(f"Land command fail. status_code={land_result.status_code}")
-            exit()
-        print("Vehicle landed.")
-        exit()
-
-polygon_list = args.sides
-for l in polygon_list:
-    print(f"\n ---polygon {l}---------------------------------- \n")
-
-    # For each polygon gets the NED trajectory vectors to the vertices
-    polygon_trajectory = make_polygon_trajectory(args.radius, l)
-        
-    # Moving
-    for vector in polygon_trajectory:
-        # For each vertex moves the vehicle along its trajectory using drive_wait
-        vector_result = requests.post(f"{base_url}/movement/drive_wait", json=vector)
-        if vector_result.status_code != 200:
-            print(f"Drive_wait command fail. status_code={vector_result.status_code} vector={vector}")
-            exit()
-        print(f"\nTrajectory vector: {vector})")
-
-        #sleep ensures the vehicle has time to reach its desired position
-        sleep(SLEEP_TIME)
-
-        # Get the NED coordinates, from telemetry, of the vertex for better user visualization and debugging
-        tele_ned_result = requests.get(f"{base_url}/telemetry/ned")
-        if tele_ned_result.status_code != 200:
-            print(f"Ned telemetry fail. status_code={tele_ned_result.status_code}")
-            exit()
-        tele_ned_pos = tele_ned_result.json()["info"]["position"]
-        print(f"Vehicle at {tele_ned_pos})")
-
-    # After completing the polygon, return the vehicle to the center using go_to_ned_wait
-    point_result = requests.post(f"{base_url}/movement/go_to_ned_wait", json=center_pos)
-    if point_result.status_code != 200:
-        print(f"Go_to_ned_wait command fail. status_code={point_result.status_code} point={center_pos}")
-        exit()
-    print(f"\nVehicle going back to the center")
-
-    #sleep ensures the vehicle has time to reach its desired position
-    sleep(SLEEP_TIME)
-    
-    print(f"Vehicle at the center")
-
-# Landing
-land_result = requests.get(f"{base_url}/command/land")
-if land_result.status_code != 200:
-    print(f"Land command fail. status_code={land_result.status_code}")
-    exit()
-print("\nVehicle landed.")
-
-```
-## Delivery Mission Simulation
-This example simulates a complete delivery cycle. The drone takes off from its home position, navigates to a pickup location defined by the user, lands to simulate picking up a package (disarming and waiting), then takes off again to navigate to a delivery location. After landing and simulating the drop-off, the drone returns to the initial home position and lands.
-
-Unlike previous examples that rely on `go_to_ned_wait`, this script uses the asynchronous `go_to_ned` endpoint and implements a custom arrival check loop function called `wait_for_arrival`. This function continuously checks the telemetry to calculate the Euclidean distance between the drone's current position and the target coordinate. The drone is considered to have arrived when the distance `d` is less than a defined tolerance:
-
-$$d = \sqrt{(x_{target}-x_{current})^2 + (y_{target}-y_{current})^2 + (z_{target}-z_{current})^2}$$
-
-Additionally, the script calculates the absolute position adjustments. Since the user inputs coordinates relative to the takeoff point (0,0,0), the script adds the global NED coordinates of the "Home" position to the target:
-
-$$P_{target} = P_{home} + P_{input}$$
-
-To ensure safety during navigation, the script applies a `SAFE_OFFSET` (typically -2 meters) to the flight altitude when moving between points, only descending to the exact Z coordinate during the landing phase.
-
-To use this example, the user must provide the Pickup and Delivery coordinates as command-line arguments in the format `North,East,Down`. Note that altitude (Down) should be negative for positions above ground, though the script attempts to correct positive inputs.
-
-For example, to pick up a package at (1m North, 3m East, 3m Up) and deliver it at (0m North, 2m East, 3m Up):
-
-`python delivery_simulation.py 1,3,-3 0,2,-3`
-
-If no arguments are provided, the script runs with default coordinates.
-
-This file is located at `flight_examples/delivery/delivery_simulation.py`.
-
-```Python
-#Objective: Control a drone via Python to simulate a delivery.
-#The drone picks up the package, goes to the delivery point, lands,
-#disarms, simulates/drops an actuator, arms, takes off, and returns to first takeoff point (home).
-
-#Steps:
-# 1. Receive pickup and delivery locations as NED points via command line arguments.
-# 2. Get home location from drone telemetry.
-# 3. Arm and take off to a safe altitude.
-# 4. Navigate to pickup location, land, disarm, simulate package pickup.
-# 5. Arm, take off to a safe altitude, navigate to delivery location, land, disarm, simulate package drop.
-# 6. Arm, take off to a safe altitude, return to home location, land.
-
-#Observations:
-# - A -2 meter offset is applied to the Down NED points for safe altitude during navigation.
-# - Takeoff altitude is set to 5 meters above ground level.
-
-import sys #sys module to handle command line arguments
-import requests #requests module to make HTTP requests
-import time #time module to handle sleep and timeouts
-import math #math module for distance calculations
-
-BASE_URL = "http://localhost:8000" # Base URL for the drone API
-SLEEP_DURATION = 4 #variable to adjust sleep duration between commands
-TAKEOFF_ALTITUDE = 5 # Safe takeoff altitude in meters
-SAFE_OFFSET = -2 # Safe offset in Down NED coordinate in meters
-
-# Function to send commands to the drone API
-def send_command(endpoint, params=None, method="GET"):
-    url = f"{BASE_URL}{endpoint}"
-    try:
-        if method == "GET":
-            response = requests.get(url, params=params)
-        elif method == "POST":
-            response = requests.post(url, json=params)
-        else:
-            raise ValueError("Unsupported HTTP method")
-
-        if response.status_code != 200:
-            print(f"Command {endpoint} failed. status_code={response.status_code}")
-            exit()
-        return response.json()
-    except requests.RequestException as e:
-        print(f"HTTP request failed: {e}")
-        exit()
-
-# Function to calculate distance between two NED points
-def distance(end, start):
-    return math.sqrt((end[0]-start[0])**2 + (end[1]-start[1])**2 + ((end[2] + SAFE_OFFSET)-start[2])**2)
-
-# Function to wait until the drone arrives at a specified location within a tolerance and timeout
-def wait_for_arrival(location, tolerance=1.0, timeout=120):
-    start = time.time()
-    while time.time() < start + timeout:
-        ned_result = requests.get(f"{BASE_URL}/telemetry/ned")
-        if ned_result.status_code != 200:
-            print(f"NED telemetry fail. status_code={ned_result.status_code}")
-            exit()
-        ned_pos = ned_result.json()["info"]["position"]
-        ned_point = (ned_pos["x"]-home_location[0], ned_pos["y"]-home_location[1], ned_pos["z"]-home_location[2])
-        dist = distance(location, ned_point)
-        print(f"Current position: {ned_point}, distance to target: {dist:.2f} m")
-        if dist < tolerance:
-            return True
-        time.sleep(2)
-    return False
-
-
-
-#Recieve package and delivery locations via command line format: N,E,D N,E,D
-if len(sys.argv) == 1: #if no arguments are provided, default locations are used
-    pickup_location = (1, 3, -3) #Default pickup location
-    delivery_location = (0, 2, -3) #Default delivery location
-    print("No command line arguments provided. Using default locations.")
-elif len(sys.argv) != 3: #Invalid number of arguments
-    print("Usage: python t3.py <pickup_location> <delivery_location>")
-    exit()
-else: #Parse command line arguments
-    try:
-        pickup_location = tuple(map(float, sys.argv[1].split(',')))
-        delivery_location = tuple(map(float, sys.argv[2].split(',')))
-        if len(pickup_location) != 3 or len(delivery_location) != 3: # Check for correct number of coordinates
-            raise ValueError
-    except ValueError:
-        print("Invalid location format. Use N(orth),E(ast),D(own)")
-        exit()
-# Ensure altitudes are negative in NED coordinates
-if pickup_location[2] >= 0 or delivery_location[2] >= 0:
-    pickup_location = (pickup_location[0], pickup_location[1], -abs(pickup_location[2]))
-    delivery_location = (delivery_location[0], delivery_location[1], -abs(delivery_location[2]))
-    print("Altitude must be negative in NED coordinates. Adjusted to negative values.")
-
-# Start
-print("\nNED points received: ", pickup_location, delivery_location)
-# Get home location
-print("Getting home location based on NED telemetry of EKF origin...")
-home = send_command("/telemetry/ned")["info"]["position"]
-home_location = (home["x"], home["y"], home["z"])
-print("Home location at NED point: ", home_location)
-time.sleep(SLEEP_DURATION) # Sleep to ensure commands are spaced out
-
-print("Arming...")
-send_command("/command/arm")
-time.sleep(SLEEP_DURATION)
-
-print("Takeoff...")
-send_command("/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
-time.sleep(SLEEP_DURATION)
-
-# Pickup location
-#default pickup_location = (1, 3, -3)
-print("Going to pickup location at NED point: ", pickup_location)
-send_command("/movement/go_to_ned", params={"x": pickup_location[0]+home_location[0],
-                                            "y": pickup_location[1]+home_location[1],
-                                            "z": pickup_location[2]+home_location[2]+SAFE_OFFSET},
-                                            method="POST")
-time.sleep(SLEEP_DURATION)
-
-print(pickup_location)
-if wait_for_arrival(pickup_location):
-    print("Drone arrived at pickup location")
-time.sleep(SLEEP_DURATION)
-
-
-print("Landing to pick up package...")
-send_command("/command/land")
-time.sleep(SLEEP_DURATION)
-
-current_ned = send_command("/telemetry/ned")["info"]["position"]
-current_ned_point = (current_ned["x"]-home_location[0],
-                     current_ned["y"]-home_location[1],
-                     current_ned["z"]-home_location[2])
-print("Current NED position after landing: ", current_ned_point)
-time.sleep(SLEEP_DURATION)
-
-print("Disarming...")
-print("Simulating package pickup...")
-# simulated pick up
-time.sleep(SLEEP_DURATION)
-
-print("Arming...")
-send_command("/command/arm")
-time.sleep(SLEEP_DURATION)
-
-print("Takeoff...")
-send_command("/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
-time.sleep(SLEEP_DURATION)
-
-# Delivery location
-#default delivery_location = (0, 2, -3)
-print("Going to delivery location at NED point: ", delivery_location)
-send_command("/movement/go_to_ned", params={"x": delivery_location[0]+home_location[0],
-                                            "y": delivery_location[1]+home_location[1],
-                                            "z": delivery_location[2]+home_location[2]+SAFE_OFFSET},
-                                            method="POST")
-time.sleep(SLEEP_DURATION)
-
-print(delivery_location)
-if wait_for_arrival(delivery_location):
-    print("Drone arrived at delivery location")
-time.sleep(SLEEP_DURATION)
-
-print("Landing to deliver package...")
-send_command("/command/land")
-time.sleep(SLEEP_DURATION)
-
-current_ned = send_command("/telemetry/ned")["info"]["position"]
-current_ned_point = (current_ned["x"]-home_location[0],
-                     current_ned["y"]-home_location[1],
-                     current_ned["z"]-home_location[2])
-print("Current NED position after landing: ", current_ned_point)
-time.sleep(SLEEP_DURATION)
-
-print("Disarming...")
-print("Simulating package drop...")
-# simulated drop
-time.sleep(SLEEP_DURATION)
-
-print("Arming...")
-send_command("/command/arm")
-time.sleep(SLEEP_DURATION)
-
-print("Takeoff...")
-send_command("/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
-time.sleep(SLEEP_DURATION)
-
-print("Returning to Home at NED point: ", home_location)
-send_command("/movement/go_to_ned", params={"x": home_location[0],
-                                            "y": home_location[1],
-                                            "z": home_location[2]+SAFE_OFFSET},
-                                            method="POST")
-time.sleep(SLEEP_DURATION)
-
-if wait_for_arrival(0,0,0):
-    print("Drone arrived near Home location")
-time.sleep(SLEEP_DURATION)
-
-print("landing at Home location...")
-send_command("/command/land")
-time.sleep(SLEEP_DURATION)
-
-current_ned = send_command("/telemetry/ned")["info"]["position"]
-current_ned_point = (current_ned["x"]-home_location[0],
-                     current_ned["y"]-home_location[1],
-                     current_ned["z"]-home_location[2])
-print("Current NED position after landing: ", current_ned_point)
-
-print("Mission Accomplished")
-```
-
-## GPS-Based Follower
-This example demonstrates an autonomous follower drone that tracks a leader drone using GPS coordinates. Unlike the previous NED-based follower example, this implementation uses global GPS positioning (latitude, longitude, altitude) and implements a setup/loop architecture similar to microcontroller programming patterns.
-
-The script operates in two phases: a setup phase that initializes the follower drone, and a continuous loop phase that tracks the leader. The follower maintains a configurable offset from the leader's position to avoid collisions.
-
-The core algorithm converts meter-based offsets into GPS coordinate deltas. For latitude, the conversion is straightforward since 1 degree of latitude is approximately 111,111 meters globally:
-
-$$\Delta_{lat} = \frac{offset_{north}}{111111}$$
-
-For longitude, the conversion must account for the convergence of meridians at different latitudes. The distance represented by 1 degree of longitude varies with the cosine of the latitude:
-
-$$\Delta_{lon} = \frac{offset_{east}}{111111 \cdot \cos(lat_{leader})}$$
-
-The target position for the follower is then calculated by adding these deltas to the leader's current position:
-
-$$lat_{target} = lat_{leader} + \Delta_{lat}$$
-$$lon_{target} = lon_{leader} + \Delta_{lon}$$
-
-For altitude management, the script calculates relative altitude by subtracting the absolute ground altitude captured during setup, then applies the configured altitude offset:
-
-$$alt_{target} = \max(2.0, (alt_{leader} - alt_{ground}) + offset_{alt})$$
-
-The minimum altitude constraint ensures the follower never flies below 2 meters.
-
-To use this example, configure the leader and follower URLs in the script. The leader URL should point to the leader drone's API endpoint (which may be on a different network address), while the follower URL typically points to localhost:
-
-```python
-FOLLOWER_URL = "http://localhost:8000"
-LEADER_URL = "http://10.0.2.159:8000"  # Replace with actual leader IP
-```
-
-You can also adjust the following offset parameters to control the follower's relative position:
-
-```python
-OFFSET_NORTH = -3  # meters behind the leader
-OFFSET_EAST = 0    # horizontally aligned
-OFFSET_ALT = 2.0   # altitude difference in meters
-ALTITUDE_VOO = 2   # takeoff altitude
-```
-
-The script includes a keyboard interrupt handler (Ctrl+C) that safely triggers RTL (Return to Launch) before exiting. The loop runs at 2Hz (0.5 second intervals) to balance responsiveness with API load.
-
-This file is located at `flight_examples/follow/follow.py`.
-
-```python
-import requests
-import time
-import math
-import sys
-
-# --- CONFIGURAÇÕES ---
-FOLLOWER_URL = "http://localhost:8000" # Drone que vai seguir
-LEADER_URL   = "http://10.0.2.159:8000" # Drone a ser seguido
-
-# Offset em metros (Para o drone seguidor não bater no líder)
-OFFSET_NORTH = -3  # 3 metros atrás (se o líder estiver indo para o Norte)
-OFFSET_EAST  = 0   # Alinhado horizontalmente
-OFFSET_ALT   = 2.0
-ALTITUDE_VOO = 2  # Altura de cruzeiro
-
-ALTITUDE_ABS = 0  # Variável global
-
-
-def setup():
-    """
-    Função chamada uma única vez no início.
-    Responsável por armar e decolar o drone seguidor.
-    """
-    print("--- INICIANDO SETUP ---")
-
-    global ALTITUDE_ABS
-
-    # 1. Captura altitute absoluta
-    print("Capturando altitude absoluta...")
-    pos_result = requests.get(f"{FOLLOWER_URL}/telemetry/gps")
-
-    if pos_result.status_code == 200:
-        data = pos_result.json()
-        l_pos = data['info']['position']
-        ALTITUDE_ABS = float(l_pos['alt'])
-
-    print(f"Altitude absoluta capturada: {ALTITUDE_ABS}m")
-
-    # 2. Armar
-    print("Armando o veículo...")
-    arm_result = requests.get(f"{FOLLOWER_URL}/command/arm")
-    if arm_result.status_code != 200:
-        print(f"ERRO: Falha ao armar. Code: {arm_result.status_code}")
-        sys.exit(1)
-
-    # 3. Decolar
-    print(f"Decolando para {ALTITUDE_VOO}m...")
-    params = {"alt": ALTITUDE_VOO}
-    takeoff_result = requests.get(f"{FOLLOWER_URL}/command/takeoff", params=params)
-    if takeoff_result.status_code != 200:
-        print(f"ERRO: Falha na decolagem. Code: {takeoff_result.status_code}")
-        sys.exit(1)
-
-    print("--- SETUP CONCLUÍDO ---")
-
-def loop():
-    """
-    Função rodada repetidamente.
-    Lê a posição do Líder, calcula o Offset e move o Seguidor.
-    """
-    try:
-        # 1. PEGAR POSIÇÃO DO LÍDER (Pulling)
-        pos_result = requests.get(f"{LEADER_URL}/telemetry/gps")
-
-        if pos_result.status_code == 200:
-
-            data = pos_result.json()
-
-            l_pos = data['info']['position']
-
-            leader_lat = float(l_pos['lat'])
-            leader_lon = float(l_pos['lon'])
-            leader_alt = float(l_pos['alt'])
-
-            print(f"[Lider] Lat: {leader_lat:.6f}, Lon: {leader_lon:.6f}")
-
-            # 2. CALCULAR NOVA POSIÇÃO COM OFFSET
-
-            delta_lat = OFFSET_NORTH / 111111.0
-            delta_lon = OFFSET_EAST / (111111.0 * math.cos(math.radians(leader_lat)))
-
-            target_lat = leader_lat + delta_lat
-            target_lon = leader_lon + delta_lon
-
-            raw_target_alt = (leader_alt - ALTITUDE_ABS) + OFFSET_ALT
-            target_alt = max(2.0, raw_target_alt)
-
-            # 3. ENVIAR COMANDO DE MOVIMENTO (Go To)
-
-            fly_data = {
-                "lat": target_lat,
-                "long": target_lon,
-                "alt": target_alt,
-            }
-
-            follow_result = requests.post(f"{FOLLOWER_URL}/movement/go_to_gps", json=fly_data)
-            if follow_result.status_code != 200:
-                print(f"ERRO: Falha no movimento. Code: {follow_result.status_code}")
-                print(f"Detalhe do erro: {follow_result.text}")
-                sys.exit(0)
-
-            print(f">> Movendo Seguidor para: {target_lat:.6f}, {target_lon:.6f}")
-
-        else:
-            print(f"ERRO: Não conseguiu ler o líder. Code: {pos_result.status_code}")
-
-        # Delay do Loop (Taxa de atualização)
-        # 0.5s = 2Hz
-        time.sleep(0.5)
-
-    except Exception as e:
-        print(f"Erro no loop: {e}")
-
-# --- BLOCO PRINCIPAL ---
-if __name__ == "__main__":
-    try:
-        setup()
-        while True:
-            loop()
-    except KeyboardInterrupt:
-        # Captura Ctrl+C para pousar com segurança
-        print("\n--- INTERRUPÇÃO DETECTADA ---")
-        print("Iniciando RTL (Return to Land)...")
-        requests.get(f"{FOLLOWER_URL}/command/rtl")
-        print("Encerrando programa.")
-        sys.exit(0)
-```
-
-
 
 ---
 
@@ -1341,8 +429,9 @@ if __name__ == "__main__":
 | `uav_api/routers/movement.py` | Endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
 | `uav_api/routers/telemetry.py` | Endpoints: GPS, NED, compass, battery, sensor status, home info |
 | `uav_api/routers/mission.py` | Endpoints: upload-script, list-scripts, execute-script |
-| `uav_api/routers/peripherical.py` | Endpoints: take_photo |
+| `uav_api/routers/peripherical.py` | Endpoints: take_photo, servo_output |
 | `uav_api/classes/pos.py` | Pydantic models: `GPS_pos`, `Local_pos` |
+| `uav_api/classes/peripherical.py` | Pydantic model: `Servo_output` |
 | `uav_api/classes/script.py` | Pydantic model: `Script` |
 | `flight_examples/` | Example client scripts and INI config files |
 
@@ -1388,3 +477,719 @@ All successful responses follow a uniform envelope:
 ```
 
 Telemetry endpoints add an `"info": {...}` field with the sensor data. All errors raise `HTTP 500` with a descriptive `"detail"` string.
+
+---
+
+# Flying through scripts
+One of the perks of using UAV API is being able to quickly write scripts that control drone movement. Here are some examples.
+
+## Running examples
+To run the following examples, start the API inside the `flight_examples` directory:
+
+  `uav-api --config ./uavs/uav_1.ini`
+
+Note that this configuration file contains default values for parameters, change the values such that it matches your environment. You can also use your own configuration file or start the API through arguments.
+
+Once the API is up and running, run one of the examples below in a new terminal instance. All examples run with **zero arguments** using sensible defaults, but every parameter is configurable via command-line flags.
+
+## Common Pattern
+
+All flight examples share a helper module (`flight_examples/flight_helpers.py`) that provides:
+
+- **`add_common_args(parser)`** — adds `--url`, `--altitude`, `--h3`, and `--certfile` to any argparse parser, all with defaults.
+- **`create_session(args)`** — returns a `requests.Session` (HTTP) or `niquests.Session` (HTTP/3 over QUIC when `--h3` is set).
+- **`send_command(session, base_url, endpoint, ...)`** — sends GET/POST requests, checks status codes, and exits on failure.
+- **`get_home_ned(session, base_url)`** / **`get_home_gps(session, base_url)`** — captures the current position as a home reference (call after arming, before takeoff).
+- **`ned_relative_to_absolute(relative, home)`** — converts a home-relative NED point to absolute coordinates.
+- **`wait_for_arrival(session, base_url, target, ...)`** — polls `/telemetry/ned` until the drone is within tolerance of the target.
+- **`setup_graceful_shutdown(session, base_url)`** — registers a Ctrl+C handler that sends RTL before exiting.
+
+**Key conventions:**
+- **NED coordinates** are specified relative to the home position (captured after arming, before takeoff). The script converts them to absolute coordinates when sending commands.
+- **GPS altitude** is relative to the home altitude captured at startup.
+- **HTTP/3** is supported by all examples via the `--h3` flag (requires `niquests` and TLS certs from the `--udp` mode).
+- **Ctrl+C** triggers RTL (Return to Launch) for safe shutdown.
+
+## Simple Takeoff and Landing
+The simplest example — arm, take off, and land. This file is located at `flight_examples/takeoff_land/takeoff_land.py`.
+```python
+"""Takeoff and land — the simplest flight example."""
+
+import sys
+import os
+import argparse
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from flight_helpers import add_common_args, get_base_url, create_session, send_command, setup_graceful_shutdown
+
+parser = argparse.ArgumentParser(description="Arm, take off, and land.")
+add_common_args(parser)
+args = parser.parse_args()
+
+base_url = get_base_url(args)
+session = create_session(args)
+setup_graceful_shutdown(session, base_url)
+
+# Arm
+send_command(session, base_url, "/command/arm")
+print("Vehicle armed.")
+
+# Take off
+send_command(session, base_url, "/command/takeoff", params={"alt": args.altitude})
+print(f"Vehicle took off to {args.altitude}m.")
+
+# Land
+send_command(session, base_url, "/command/land")
+print("Vehicle landed.")
+```
+
+## NED Square
+In this example the UAV flies a square pattern using home-relative NED coordinates. The square side length defaults to 20m and is configurable via `--side`. This file is located at `flight_examples/ned_square/ned_square.py`.
+```python
+import sys
+import os
+import argparse
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from flight_helpers import (
+    add_common_args, get_base_url, create_session, send_command,
+    get_home_ned, ned_relative_to_absolute, setup_graceful_shutdown,
+)
+
+parser = argparse.ArgumentParser(description="Fly a square pattern using NED coordinates.")
+add_common_args(parser)
+parser.add_argument('--side', type=float, default=20,
+                    help='Side length of the square in meters (default: 20)')
+args = parser.parse_args()
+
+base_url = get_base_url(args)
+session = create_session(args)
+setup_graceful_shutdown(session, base_url)
+
+# Arm vehicle
+send_command(session, base_url, "/command/arm")
+print("Vehicle armed.")
+
+# Capture home NED position after arming, before takeoff
+home = get_home_ned(session, base_url)
+
+# Take off
+send_command(session, base_url, "/command/takeoff", params={"alt": args.altitude})
+print(f"Vehicle took off to {args.altitude}m.")
+
+# Define square waypoints as relative offsets from home
+side = args.side
+alt = -args.altitude
+relative_points = [
+    (side, side, alt),
+    (side, -side, alt),
+    (-side, -side, alt),
+    (-side, side, alt),
+]
+
+# Fly the square
+for rel in relative_points:
+    absolute = ned_relative_to_absolute(rel, home)
+    point_data = {"x": absolute[0], "y": absolute[1], "z": absolute[2]}
+    send_command(session, base_url, "/movement/go_to_ned_wait", params=point_data, method="POST")
+    print(f"Vehicle at absolute NED ({absolute[0]:.1f}, {absolute[1]:.1f}, {absolute[2]:.1f})")
+
+# Return to launch
+send_command(session, base_url, "/command/rtl")
+print("Vehicle landed at launch.")
+```
+
+## NED Square (Polling)
+This example does the same thing as the last one but instead of using the blocking `go_to_ned_wait` endpoint, it uses the non-blocking `go_to_ned` and polls `/telemetry/ned` to check arrival. While more verbose, this approach allows your program to do other things while the UAV is in transit. This file is located at `flight_examples/ned_square_polling/ned_square_polling.py`.
+```python
+import sys
+import os
+import argparse
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from flight_helpers import (
+    add_common_args, get_base_url, create_session, send_command,
+    get_home_ned, ned_relative_to_absolute, wait_for_arrival, setup_graceful_shutdown,
+)
+
+parser = argparse.ArgumentParser(description="Fly a square pattern using NED coordinates (polling version).")
+add_common_args(parser)
+parser.add_argument('--side', type=float, default=20,
+                    help='Side length of the square in meters (default: 20)')
+args = parser.parse_args()
+
+base_url = get_base_url(args)
+session = create_session(args)
+setup_graceful_shutdown(session, base_url)
+
+# Arm vehicle
+send_command(session, base_url, "/command/arm")
+print("Vehicle armed.")
+
+# Capture home NED position after arming, before takeoff
+home = get_home_ned(session, base_url)
+
+# Take off
+send_command(session, base_url, "/command/takeoff", params={"alt": args.altitude})
+print(f"Vehicle took off to {args.altitude}m.")
+
+# Define square waypoints as relative offsets from home
+side = args.side
+alt = -args.altitude
+relative_points = [
+    (side, side, alt),
+    (side, -side, alt),
+    (-side, -side, alt),
+    (-side, side, alt),
+]
+
+# Fly the square using non-blocking go_to_ned + polling
+for i, rel in enumerate(relative_points, start=1):
+    absolute = ned_relative_to_absolute(rel, home)
+    point_data = {"x": absolute[0], "y": absolute[1], "z": absolute[2]}
+    print(f"\nWaypoint {i}: sending go_to_ned -> ({absolute[0]:.1f}, {absolute[1]:.1f}, {absolute[2]:.1f})")
+    send_command(session, base_url, "/movement/go_to_ned", params=point_data, method="POST")
+    arrived = wait_for_arrival(session, base_url, absolute, tolerance=1.0, timeout=120)
+    if arrived:
+        print(f"Waypoint {i}: arrived.")
+    else:
+        print(f"Waypoint {i}: timed out — aborting, sending RTL.")
+        send_command(session, base_url, "/command/rtl")
+        exit(1)
+
+# Return to launch
+send_command(session, base_url, "/command/rtl")
+print("\nSquare complete — vehicle returning to launch.")
+```
+
+## Make polygon with Go To
+
+This example raises the drone to a height defined by the user and then, using the endpoint `go_to_ned_wait`, takes the drone to the vertices of regular polygons also to be defined by the user. These polygons have their center located at the point where the drone was raised and are always made vertically. Whenever a polygon is finished, the drone returns to the center before starting the next one.
+The algorithm that maps the polygon points is found in the `make_polygon_points` function and works by inscribing a polygon with `s` vertices inside a circle of radius `r` and the NED coordinates of the center defined as `offset`. Since the polygon is inscribed, we know that its vertices are located on the perimeter of the circle, and since we also know that the polygon is regular, the vertices are equidistant, so we can find the angular distance of each vertex from $\frac{2\pi}{n}$. Now, numbering each vertex `v` from $v_{0}=0$ to $v_{n}=s-1$, we can find the angle of each one using the function:  
+
+$$\theta_{i}=v_{i}\frac{2\pi}{n}$$
+
+Finally, knowing the angle of the vertices, the coordinates of the center, and knowing that the polygon must be drawn vertically, we can define the NED coordinates of the vertices as:  
+
+$$x_{i}=\sin(v_{i}\frac{2\pi}{n})+x_{offset}$$
+$$y_{i}=y_{offset}$$
+$$z_{i}=-\cos(v_{i}\frac{2\pi}{n})+z_{offset}$$
+
+For example, to create a triangle, a square, and a pentagon inscribed in a circle with radius 3m at 4m height:
+
+`python go_to_polygon.py --sides 3 4 5 --radius 3 --height 4`  
+
+All arguments have defaults (sides=4, radius=10, height=20), so running with no arguments creates a square.
+  
+This file is located at `flight_examples/go_to_polygon/go_to_polygon.py`.
+
+```python
+import sys
+import os
+import math
+from time import sleep
+import argparse
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from flight_helpers import (
+    add_common_args, get_base_url, create_session,
+    send_command, setup_graceful_shutdown
+)
+
+SLEEP_TIME = 5
+
+
+def make_polygon_points(r, s, offset):
+    points = []
+    for v in range(s):
+        point = {
+            "x": r*math.sin(v*2*math.pi/s) + offset["x"],
+            "y": offset["y"],
+            "z": -(r*math.cos(v*2*math.pi/s)) + offset["z"]
+        }
+        print(f"polygon point {v}: {point}")
+        points.append(point)
+    return(points)
+
+
+# Get the user's arguments
+parser = argparse.ArgumentParser()
+add_common_args(parser)
+parser.add_argument('--sides', type=int, nargs='+', default=[4])
+parser.add_argument('--radius', type=int, default=10)
+parser.add_argument('--height', type=int, default=20)
+args = parser.parse_args()
+
+# Ensures that the user defines a valid regular polygon
+if 1 in args.sides or 2 in args.sides:
+    print(f"Error: Polygon must have more than two sides!")
+    exit()
+
+# Failsafe: Ensure that the radius is smaller than the height of the perimeter's center
+if args.radius >= args.height:
+    print(f"Error: height value must be higher than the radius value!")
+    exit()
+
+base_url = get_base_url(args)
+session = create_session(args)
+setup_graceful_shutdown(session, base_url)
+
+# Arming vehicle
+send_command(session, base_url, "/command/arm")
+print("Vehicle armed.")
+
+# Get the NED coordinates of the initial position with the vehicle still on the ground
+initial_result = send_command(session, base_url, "/telemetry/ned")
+initial_pos = initial_result["info"]["position"]
+print(f"Initial point: {initial_pos}")
+
+# Taking off
+send_command(session, base_url, "/command/takeoff", params={"alt": args.height})
+print("Vehicle took off")
+
+sleep(SLEEP_TIME)
+
+# Get the NED coordinates of the center of the polygons
+center_result = send_command(session, base_url, "/telemetry/ned")
+center_pos = center_result["info"]["position"]
+print(f"center point: {center_pos}")
+
+# Failsafe: Ensures the drone has reached the desired altitude
+if abs(center_pos["z"]-initial_pos["z"]) >= args.height+2 or abs(center_pos["z"]-initial_pos["z"]) <= args.height-2:
+        print(f"Error: Vehicle did not reach the desired height.")
+        send_command(session, base_url, "/command/land")
+        print("Vehicle landed.")
+        exit()
+
+polygon_list = args.sides
+for s in polygon_list:
+    print(f"\n ---polygon {s}---------------------------------- \n")
+
+    polygon_points = make_polygon_points(args.radius, s, center_pos)
+
+    for point in polygon_points:
+        send_command(session, base_url, "/movement/go_to_ned_wait", params=point, method="POST")
+        print(f"\nGo to point: {point})")
+
+        sleep(SLEEP_TIME)
+
+        tele_ned_result = send_command(session, base_url, "/telemetry/ned")
+        tele_ned_pos = tele_ned_result["info"]["position"]
+        print(f"Vehicle at {tele_ned_pos})")
+
+    # Return to center
+    send_command(session, base_url, "/movement/go_to_ned_wait", params=center_pos, method="POST")
+    print(f"\nVehicle going back to the center")
+
+    sleep(SLEEP_TIME)
+    print(f"Vehicle at the center")
+
+# Landing
+send_command(session, base_url, "/command/land")
+print("\nVehicle landed.")
+```
+
+## Make polygon with Drive
+
+This example works the same way as the last one with one change: it uses the `drive_wait` endpoint to move the drone via relative trajectory vectors instead of absolute coordinates. The `make_polygon_trajectory` function computes edge vectors as deltas between consecutive polygon vertices:
+
+$$x_{i}=r \cdot \sin(v_{i+1}\frac{2\pi}{n}) - r \cdot \sin(v_{i}\frac{2\pi}{n})$$
+$$y_{i}=0$$
+$$z_{i}=-(r \cdot \cos(v_{i+1}\frac{2\pi}{n}) - r \cdot \cos(v_{i}\frac{2\pi}{n}))$$
+
+This file is located at `flight_examples/drive_polygon/drive_polygon.py`.
+
+```python
+import sys
+import os
+import math
+from time import sleep
+import argparse
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from flight_helpers import (
+    add_common_args, get_base_url, create_session,
+    send_command, setup_graceful_shutdown
+)
+
+SLEEP_TIME = 5
+
+
+def make_polygon_trajectory(r, l):
+    vectors = []
+    for n in range(l):
+        vector = {
+            "x": round(r * math.sin((n + 1) * 2 * math.pi / l) - r * math.sin(n * 2 * math.pi / l)),
+            "y": 0,
+            "z": -(round(r * math.cos((n + 1) * 2 * math.pi / l) - r * math.cos(n * 2 * math.pi / l)))
+        }
+        print(f"polygon vector {n}: {vector}")
+        vectors.append(vector)
+
+    return vectors
+
+
+# Get the user's arguments
+parser = argparse.ArgumentParser()
+add_common_args(parser)
+parser.add_argument('--sides', type=int, nargs='+', default=[4])
+parser.add_argument('--radius', type=int, default=10)
+parser.add_argument('--height', type=int, default=20)
+args = parser.parse_args()
+
+base_url = get_base_url(args)
+session = create_session(args)
+setup_graceful_shutdown(session, base_url)
+
+# Validation
+if 1 in args.sides or 2 in args.sides:
+    print(f"Error: Polygon must have more than two sides!")
+    exit()
+
+if args.radius >= args.height:
+    print(f"Error: height value must be higher than the radius value!")
+    exit()
+
+# Arming vehicle
+send_command(session, base_url, "/command/arm")
+print("Vehicle armed.")
+
+initial_result = send_command(session, base_url, "/telemetry/ned")
+initial_pos = initial_result["info"]["position"]
+print(f"Initial point: {initial_pos}")
+
+send_command(session, base_url, "/command/takeoff", params={"alt": args.height})
+print("Vehicle took off")
+
+sleep(SLEEP_TIME)
+
+center_result = send_command(session, base_url, "/telemetry/ned")
+center_pos = center_result["info"]["position"]
+print(f"center point: {center_pos}")
+
+# Altitude failsafe
+if abs(center_pos["z"]-initial_pos["z"]) >= args.height+2 or abs(center_pos["z"]-initial_pos["z"]) <= args.height-2:
+        print(f"Error: Vehicle did not reach the desired height.")
+        send_command(session, base_url, "/command/land")
+        print("Vehicle landed.")
+        exit()
+
+polygon_list = args.sides
+for l in polygon_list:
+    print(f"\n ---polygon {l}---------------------------------- \n")
+
+    polygon_trajectory = make_polygon_trajectory(args.radius, l)
+
+    for vector in polygon_trajectory:
+        send_command(session, base_url, "/movement/drive_wait", params=vector, method="POST")
+        print(f"\nTrajectory vector: {vector})")
+
+        sleep(SLEEP_TIME)
+
+        tele_ned_result = send_command(session, base_url, "/telemetry/ned")
+        tele_ned_pos = tele_ned_result["info"]["position"]
+        print(f"Vehicle at {tele_ned_pos})")
+
+    # Return to center
+    send_command(session, base_url, "/movement/go_to_ned_wait", params=center_pos, method="POST")
+    print(f"\nVehicle going back to the center")
+
+    sleep(SLEEP_TIME)
+    print(f"Vehicle at the center")
+
+# Landing
+send_command(session, base_url, "/command/land")
+print("\nVehicle landed.")
+```
+## Delivery Mission Simulation
+This example simulates a complete delivery cycle: home -> pickup -> delivery -> home. The drone uses the non-blocking `go_to_ned` endpoint with `wait_for_arrival` polling to check arrival via Euclidean distance:
+
+$$d = \sqrt{(x_{target}-x_{current})^2 + (y_{target}-y_{current})^2 + (z_{target}-z_{current})^2}$$
+
+Coordinates are home-relative NED. The script adds the home position to convert to absolute:
+
+$$P_{target} = P_{home} + P_{input}$$
+
+A `SAFE_OFFSET` (-2m) is added to the Down component during flight for safe cruise altitude. Pickup and delivery locations default to `(10,0,-5)` and `(0,10,-5)` but are configurable via `--pickup` and `--delivery`.
+
+`python delivery_simulation.py --pickup 1,3,-3 --delivery 0,2,-3`
+
+This file is located at `flight_examples/delivery/delivery_simulation.py`.
+
+`python delivery_simulation.py` (runs with defaults: pickup=10,0,-5, delivery=0,10,-5)
+
+```python
+"""Delivery simulation: pickup a package, fly to delivery point, return home."""
+
+import sys
+import os
+import time
+import argparse
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from flight_helpers import (
+    add_common_args, get_base_url, create_session, send_command,
+    get_home_ned, ned_relative_to_absolute, wait_for_arrival,
+    setup_graceful_shutdown, euclidean_distance,
+)
+
+SLEEP_DURATION = 4
+TAKEOFF_ALTITUDE = 5
+SAFE_OFFSET = -2
+
+
+def parse_ned(s):
+    """Parse a 'N,E,D' string into a tuple of three floats."""
+    parts = tuple(map(float, s.split(",")))
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError(f"Expected N,E,D format, got: {s}")
+    return parts
+
+
+def ensure_negative_altitude(ned):
+    """Ensure the Down component is negative (above ground in NED)."""
+    if ned[2] >= 0:
+        print("Altitude must be negative in NED coordinates. Adjusted to negative value.")
+        return (ned[0], ned[1], -abs(ned[2]))
+    return ned
+
+
+def go_to_relative(session, base_url, relative, home):
+    """Navigate to a home-relative NED point with SAFE_OFFSET applied to Down."""
+    target_abs = (
+        relative[0] + home[0],
+        relative[1] + home[1],
+        relative[2] + home[2] + SAFE_OFFSET,
+    )
+    send_command(session, base_url, "/movement/go_to_ned",
+                 params={"x": target_abs[0], "y": target_abs[1], "z": target_abs[2]},
+                 method="POST")
+    return target_abs
+
+
+# --- Argument parsing ---
+parser = argparse.ArgumentParser(
+    description="Simulate a drone delivery: home -> pickup -> delivery -> home."
+)
+add_common_args(parser)
+parser.add_argument("--pickup", type=str, default="10,0,-5",
+                    help="Pickup location as N,E,D (default: 10,0,-5)")
+parser.add_argument("--delivery", type=str, default="0,10,-5",
+                    help="Delivery location as N,E,D (default: 0,10,-5)")
+args = parser.parse_args()
+
+pickup_location = ensure_negative_altitude(parse_ned(args.pickup))
+delivery_location = ensure_negative_altitude(parse_ned(args.delivery))
+
+base_url = get_base_url(args)
+session = create_session(args)
+setup_graceful_shutdown(session, base_url)
+
+# --- Mission start ---
+print(f"\nPickup:   {pickup_location}")
+print(f"Delivery: {delivery_location}")
+
+# Arm
+print("Arming...")
+send_command(session, base_url, "/command/arm")
+time.sleep(SLEEP_DURATION)
+
+# Get home location after arming, before takeoff
+home = get_home_ned(session, base_url)
+time.sleep(SLEEP_DURATION)
+
+print(f"Takeoff to {TAKEOFF_ALTITUDE}m...")
+send_command(session, base_url, "/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
+time.sleep(SLEEP_DURATION)
+
+# --- Leg 1: Home -> Pickup ---
+print(f"Going to pickup location: {pickup_location}")
+target_abs = go_to_relative(session, base_url, pickup_location, home)
+time.sleep(SLEEP_DURATION)
+
+if wait_for_arrival(session, base_url, target_abs):
+    print("Drone arrived at pickup location.")
+time.sleep(SLEEP_DURATION)
+
+print("Landing to pick up package...")
+send_command(session, base_url, "/command/land")
+time.sleep(SLEEP_DURATION)
+
+time.sleep(SLEEP_DURATION)
+
+# Arm and take off again
+print("Arming...")
+send_command(session, base_url, "/command/arm")
+time.sleep(SLEEP_DURATION)
+
+print(f"Takeoff to {TAKEOFF_ALTITUDE}m...")
+send_command(session, base_url, "/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
+time.sleep(SLEEP_DURATION)
+
+# --- Leg 2: Pickup -> Delivery ---
+print(f"Going to delivery location: {delivery_location}")
+target_abs = go_to_relative(session, base_url, delivery_location, home)
+time.sleep(SLEEP_DURATION)
+
+if wait_for_arrival(session, base_url, target_abs):
+    print("Drone arrived at delivery location.")
+time.sleep(SLEEP_DURATION)
+
+print("Landing to deliver package...")
+send_command(session, base_url, "/command/land")
+time.sleep(SLEEP_DURATION)
+
+time.sleep(SLEEP_DURATION)
+
+# Arm and take off again
+print("Arming...")
+send_command(session, base_url, "/command/arm")
+time.sleep(SLEEP_DURATION)
+
+print(f"Takeoff to {TAKEOFF_ALTITUDE}m...")
+send_command(session, base_url, "/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
+time.sleep(SLEEP_DURATION)
+
+# --- Leg 3: Delivery -> Home ---
+home_relative = (0, 0, 0)
+print(f"Returning to home...")
+target_abs = go_to_relative(session, base_url, home_relative, home)
+time.sleep(SLEEP_DURATION)
+
+if wait_for_arrival(session, base_url, target_abs):
+    print("Drone arrived near home location.")
+time.sleep(SLEEP_DURATION)
+
+print("Landing at home location...")
+send_command(session, base_url, "/command/land")
+time.sleep(SLEEP_DURATION)
+
+print("Mission accomplished.")
+```
+
+## GPS-Based Follower
+This example tracks a leader drone using GPS coordinates instead of NED. It uses a setup/loop architecture: the setup phase captures home altitude, arms, and takes off; the loop phase continuously reads the leader's GPS and moves the follower with a configurable offset.
+
+The core algorithm converts meter-based offsets into GPS coordinate deltas using Haversine approximation:
+
+$$\Delta_{lat} = \frac{offset_{north}}{111111}$$
+
+$$\Delta_{lon} = \frac{offset_{east}}{111111 \cdot \cos(lat_{leader})}$$
+
+For altitude, relative altitude is calculated by subtracting the home altitude captured at setup:
+
+$$alt_{target} = \max(2.0, (alt_{leader} - alt_{ground}) + offset_{alt})$$
+
+All parameters are configurable via argparse: `--leader-url`, `--offset-north`, `--offset-east`, `--offset-alt`. Ctrl+C triggers RTL. The loop runs at 2Hz.
+
+This file is located at `flight_examples/gps_follower/gps_follower.py`.
+
+```python
+import math
+import time
+import sys
+import os
+import argparse
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from flight_helpers import (
+    add_common_args, get_base_url, create_session,
+    send_command, get_home_gps, setup_graceful_shutdown,
+)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="GPS follower — tracks a leader drone with a configurable offset.")
+    add_common_args(parser)
+    parser.add_argument('--leader-url', type=str, default='localhost:8001',
+                        help='Leader API host:port (default: localhost:8001)')
+    parser.add_argument('--offset-north', type=float, default=-3,
+                        help='North offset in meters; negative = behind (default: -3)')
+    parser.add_argument('--offset-east', type=float, default=0,
+                        help='East offset in meters (default: 0)')
+    parser.add_argument('--offset-alt', type=float, default=2.0,
+                        help='Altitude offset above leader in meters (default: 2.0)')
+    return parser.parse_args()
+
+
+def setup(session, base_url, leader_session, leader_base_url, altitude):
+    """One-time setup: arm, capture home altitude, capture leader home altitude, and take off."""
+    print("--- STARTING SETUP ---")
+
+    # Arm the vehicle
+    print("Arming the vehicle...")
+    send_command(session, base_url, "/command/arm")
+
+    # Capture home GPS after arming, before takeoff
+    home = get_home_gps(session, base_url)
+    home_alt = home[2]
+    print(f"Follower home altitude captured: {home_alt:.1f}m")
+
+    # Capture leader home GPS altitude (different barometer calibration)
+    leader_home = get_home_gps(leader_session, leader_base_url)
+    leader_home_alt = leader_home[2]
+    print(f"Leader home altitude captured: {leader_home_alt:.1f}m")
+
+    # Take off
+    print(f"Taking off to {altitude}m...")
+    send_command(session, base_url, "/command/takeoff", params={"alt": altitude})
+
+    print("--- SETUP COMPLETE ---")
+    return home_alt, leader_home_alt
+
+
+def loop(session, base_url, leader_session, leader_base_url, home_alt, leader_home_alt, args):
+    """Repeated loop: read leader position, compute offset, move follower."""
+    try:
+        data = send_command(leader_session, leader_base_url, "/telemetry/gps")
+        l_pos = data["info"]["position"]
+
+        leader_lat = float(l_pos["lat"])
+        leader_lon = float(l_pos["lon"])
+        leader_alt = float(l_pos["alt"])
+
+        print(f"[Leader] Lat: {leader_lat:.6f}, Lon: {leader_lon:.6f}")
+
+        # Compute target position with offset (Haversine approximation)
+        delta_lat = args.offset_north / 111111.0
+        delta_lon = args.offset_east / (111111.0 * math.cos(math.radians(leader_lat)))
+
+        target_lat = leader_lat + delta_lat
+        target_lon = leader_lon + delta_lon
+
+        leader_relative_alt = leader_alt - leader_home_alt
+        raw_target_alt = leader_relative_alt + args.offset_alt
+        target_alt = max(2.0, raw_target_alt)
+
+        fly_data = {"lat": target_lat, "long": target_lon, "alt": target_alt}
+        send_command(session, base_url, "/movement/go_to_gps", params=fly_data, method="POST")
+
+        print(f">> Moving follower to: {target_lat:.6f}, {target_lon:.6f}, alt={target_alt:.1f}m")
+
+    except Exception as e:
+        print(f"Loop error: {e}")
+
+    time.sleep(0.5)
+
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    follower_base_url = get_base_url(args)
+    scheme = "https" if args.h3 else "http"
+    leader_base_url = f"{scheme}://{args.leader_url}"
+
+    follower_session = create_session(args)
+    leader_session = create_session(args)
+
+    setup_graceful_shutdown(follower_session, follower_base_url)
+
+    home_alt, leader_home_alt = setup(follower_session, follower_base_url,
+                                      leader_session, leader_base_url, args.altitude)
+
+    print("\n--- FOLLOWING LEADER (Ctrl+C to RTL and exit) ---\n")
+    while True:
+        loop(follower_session, follower_base_url,
+             leader_session, leader_base_url, home_alt, leader_home_alt, args)
+```

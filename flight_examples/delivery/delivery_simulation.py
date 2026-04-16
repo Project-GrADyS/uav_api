@@ -1,207 +1,166 @@
-#Objective: Control a drone via Python to simulate a delivery.
-#The drone picks up the package, goes to the delivery point, lands,
-#disarms, simulates/drops an actuator, arms, takes off, and returns to first takeoff point (home).
+"""Delivery simulation: pickup a package, fly to delivery point, return home.
 
-#Steps:
-# 1. Receive pickup and delivery locations as NED points via command line arguments.
-# 2. Get home location from drone telemetry.
-# 3. Arm and take off to a safe altitude.
-# 4. Navigate to pickup location, land, disarm, simulate package pickup.
-# 5. Arm, take off to a safe altitude, navigate to delivery location, land, disarm, simulate package drop.
-# 6. Arm, take off to a safe altitude, return to home location, land.
+Mission flow:
+  1. Arm and take off to safe altitude.
+  2. Fly to pickup location, land, simulate package pickup.
+  3. Arm, take off, fly to delivery location, land, simulate package drop.
+  4. Arm, take off, return to home, land.
 
-#Observations:
-# - A -2 meter offset is applied to the Down NED points for safe altitude during navigation.
-# - Takeoff altitude is set to 5 meters above ground level.
+Coordinates are home-relative NED (North, East, Down). A SAFE_OFFSET is added
+to the Down component during navigation for safe cruise altitude.
+"""
 
-import sys #sys module to handle command line arguments
-import requests #requests module to make HTTP requests
-import time #time module to handle sleep and timeouts
-import math #math module for distance calculations
+import sys
+import os
+import time
+import argparse
 
-BASE_URL = "http://localhost:8000" # Base URL for the drone API
-SLEEP_DURATION = 4 #variable to adjust sleep duration between commands
-TAKEOFF_ALTITUDE = 5 # Safe takeoff altitude in meters
-SAFE_OFFSET = -2 # Safe offset in Down NED coordinate in meters
+# Allow importing flight_helpers from the parent directory
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# Function to send commands to the drone API
-def send_command(endpoint, params=None, method="GET"):
-    url = f"{BASE_URL}{endpoint}"
-    try:
-        if method == "GET":
-            response = requests.get(url, params=params)
-        elif method == "POST":
-            response = requests.post(url, json=params)
-        else:
-            raise ValueError("Unsupported HTTP method")
+from flight_helpers import (
+    add_common_args,
+    get_base_url,
+    create_session,
+    send_command,
+    get_home_ned,
+    ned_relative_to_absolute,
+    wait_for_arrival,
+    setup_graceful_shutdown,
+    euclidean_distance,
+)
 
-        if response.status_code != 200:
-            print(f"Command {endpoint} failed. status_code={response.status_code}")
-            exit()
-        return response.json()
-    except requests.RequestException as e:
-        print(f"HTTP request failed: {e}")
-        exit()
-
-# Function to calculate distance between two NED points
-def distance(end, start):
-    return math.sqrt((end[0]-start[0])**2 + (end[1]-start[1])**2 + ((end[2] + SAFE_OFFSET)-start[2])**2)
-
-# Function to wait until the drone arrives at a specified location within a tolerance and timeout
-def wait_for_arrival(location, tolerance=1.0, timeout=120):
-    start = time.time()
-    while time.time() < start + timeout:
-        ned_result = requests.get(f"{BASE_URL}/telemetry/ned")
-        if ned_result.status_code != 200:
-            print(f"NED telemetry fail. status_code={ned_result.status_code}")
-            exit()
-        ned_pos = ned_result.json()["info"]["position"]
-        ned_point = (ned_pos["x"]-home_location[0], ned_pos["y"]-home_location[1], ned_pos["z"]-home_location[2])
-        dist = distance(location, ned_point)
-        print(f"Current position: {ned_point}, distance to target: {dist:.2f} m")
-        if dist < tolerance:
-            return True
-        time.sleep(2)
-    return False
+SLEEP_DURATION = 4  # seconds between commands
+TAKEOFF_ALTITUDE = 5  # meters AGL
+SAFE_OFFSET = -2  # extra Down offset for safe cruise altitude
 
 
+def parse_ned(s):
+    """Parse a 'N,E,D' string into a tuple of three floats."""
+    parts = tuple(map(float, s.split(",")))
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError(f"Expected N,E,D format, got: {s}")
+    return parts
 
-#Recieve package and delivery locations via command line format: N,E,D N,E,D
-if len(sys.argv) == 1: #if no arguments are provided, default locations are used
-    pickup_location = (1, 3, -3) #Default pickup location
-    delivery_location = (0, 2, -3) #Default delivery location
-    print("No command line arguments provided. Using default locations.")
-elif len(sys.argv) != 3: #Invalid number of arguments
-    print("Usage: python t3.py <pickup_location> <delivery_location>")
-    exit()
-else: #Parse command line arguments
-    try:
-        pickup_location = tuple(map(float, sys.argv[1].split(',')))
-        delivery_location = tuple(map(float, sys.argv[2].split(',')))
-        if len(pickup_location) != 3 or len(delivery_location) != 3: # Check for correct number of coordinates
-            raise ValueError
-    except ValueError:
-        print("Invalid location format. Use N(orth),E(ast),D(own)")
-        exit()
-# Ensure altitudes are negative in NED coordinates
-if pickup_location[2] >= 0 or delivery_location[2] >= 0:
-    pickup_location = (pickup_location[0], pickup_location[1], -abs(pickup_location[2]))
-    delivery_location = (delivery_location[0], delivery_location[1], -abs(delivery_location[2]))
-    print("Altitude must be negative in NED coordinates. Adjusted to negative values.")
 
-# Start
-print("\nNED points received: ", pickup_location, delivery_location)
-# Get home location
-print("Getting home location based on NED telemetry of EKF origin...")
-home = send_command("/telemetry/ned")["info"]["position"]
-home_location = (home["x"], home["y"], home["z"])
-print("Home location at NED point: ", home_location)
-time.sleep(SLEEP_DURATION) # Sleep to ensure commands are spaced out
+def ensure_negative_altitude(ned):
+    """Ensure the Down component is negative (above ground in NED)."""
+    if ned[2] >= 0:
+        print("Altitude must be negative in NED coordinates. Adjusted to negative value.")
+        return (ned[0], ned[1], -abs(ned[2]))
+    return ned
 
+
+def go_to_relative(session, base_url, relative, home):
+    """Navigate to a home-relative NED point with SAFE_OFFSET applied to Down."""
+    target_abs = (
+        relative[0] + home[0],
+        relative[1] + home[1],
+        relative[2] + home[2] + SAFE_OFFSET,
+    )
+    send_command(session, base_url, "/movement/go_to_ned",
+                 params={"x": target_abs[0], "y": target_abs[1], "z": target_abs[2]},
+                 method="POST")
+    return target_abs
+
+
+# --- Argument parsing ---
+parser = argparse.ArgumentParser(
+    description="Simulate a drone delivery: home -> pickup -> delivery -> home."
+)
+add_common_args(parser)
+parser.add_argument("--pickup", type=str, default="10,0,-5",
+                    help="Pickup location as N,E,D (default: 10,0,-5)")
+parser.add_argument("--delivery", type=str, default="0,10,-5",
+                    help="Delivery location as N,E,D (default: 0,10,-5)")
+args = parser.parse_args()
+
+pickup_location = ensure_negative_altitude(parse_ned(args.pickup))
+delivery_location = ensure_negative_altitude(parse_ned(args.delivery))
+
+base_url = get_base_url(args)
+session = create_session(args)
+setup_graceful_shutdown(session, base_url)
+
+# --- Mission start ---
+print(f"\nPickup:   {pickup_location}")
+print(f"Delivery: {delivery_location}")
+
+# Arm
 print("Arming...")
-send_command("/command/arm")
+send_command(session, base_url, "/command/arm")
 time.sleep(SLEEP_DURATION)
 
-print("Takeoff...")
-send_command("/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
+# Get home location after arming, before takeoff
+home = get_home_ned(session, base_url)
 time.sleep(SLEEP_DURATION)
 
-# Pickup location
-#default pickup_location = (1, 3, -3)
-print("Going to pickup location at NED point: ", pickup_location)
-send_command("/movement/go_to_ned", params={"x": pickup_location[0]+home_location[0],
-                                            "y": pickup_location[1]+home_location[1],
-                                            "z": pickup_location[2]+home_location[2]+SAFE_OFFSET},
-                                            method="POST")
+print(f"Takeoff to {TAKEOFF_ALTITUDE}m...")
+send_command(session, base_url, "/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
 time.sleep(SLEEP_DURATION)
 
-print(pickup_location)
-if wait_for_arrival(pickup_location):
-    print("Drone arrived at pickup location")
+# --- Leg 1: Home -> Pickup ---
+print(f"Going to pickup location: {pickup_location}")
+target_abs = go_to_relative(session, base_url, pickup_location, home)
 time.sleep(SLEEP_DURATION)
 
+if wait_for_arrival(session, base_url, target_abs):
+    print("Drone arrived at pickup location.")
+time.sleep(SLEEP_DURATION)
 
 print("Landing to pick up package...")
-send_command("/command/land")
+send_command(session, base_url, "/command/land")
 time.sleep(SLEEP_DURATION)
 
-current_ned = send_command("/telemetry/ned")["info"]["position"]
-current_ned_point = (current_ned["x"]-home_location[0],
-                     current_ned["y"]-home_location[1],
-                     current_ned["z"]-home_location[2])
-print("Current NED position after landing: ", current_ned_point)
+# Simulated package pickup
 time.sleep(SLEEP_DURATION)
 
-print("Disarming...")
-print("Simulating package pickup...")
-# simulated pick up
-time.sleep(SLEEP_DURATION)
-
+# Arm and take off again
 print("Arming...")
-send_command("/command/arm")
+send_command(session, base_url, "/command/arm")
 time.sleep(SLEEP_DURATION)
 
-print("Takeoff...")
-send_command("/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
+print(f"Takeoff to {TAKEOFF_ALTITUDE}m...")
+send_command(session, base_url, "/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
 time.sleep(SLEEP_DURATION)
 
-# Delivery location
-#default delivery_location = (0, 2, -3)
-print("Going to delivery location at NED point: ", delivery_location)
-send_command("/movement/go_to_ned", params={"x": delivery_location[0]+home_location[0],
-                                            "y": delivery_location[1]+home_location[1],
-                                            "z": delivery_location[2]+home_location[2]+SAFE_OFFSET},
-                                            method="POST")
+# --- Leg 2: Pickup -> Delivery ---
+print(f"Going to delivery location: {delivery_location}")
+target_abs = go_to_relative(session, base_url, delivery_location, home)
 time.sleep(SLEEP_DURATION)
 
-print(delivery_location)
-if wait_for_arrival(delivery_location):
-    print("Drone arrived at delivery location")
+if wait_for_arrival(session, base_url, target_abs):
+    print("Drone arrived at delivery location.")
 time.sleep(SLEEP_DURATION)
 
 print("Landing to deliver package...")
-send_command("/command/land")
+send_command(session, base_url, "/command/land")
 time.sleep(SLEEP_DURATION)
 
-current_ned = send_command("/telemetry/ned")["info"]["position"]
-current_ned_point = (current_ned["x"]-home_location[0],
-                     current_ned["y"]-home_location[1],
-                     current_ned["z"]-home_location[2])
-print("Current NED position after landing: ", current_ned_point)
+# Simulated package drop
 time.sleep(SLEEP_DURATION)
 
-print("Disarming...")
-print("Simulating package drop...")
-# simulated drop
-time.sleep(SLEEP_DURATION)
-
+# Arm and take off again
 print("Arming...")
-send_command("/command/arm")
+send_command(session, base_url, "/command/arm")
 time.sleep(SLEEP_DURATION)
 
-print("Takeoff...")
-send_command("/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
+print(f"Takeoff to {TAKEOFF_ALTITUDE}m...")
+send_command(session, base_url, "/command/takeoff", params={"alt": TAKEOFF_ALTITUDE})
 time.sleep(SLEEP_DURATION)
 
-print("Returning to Home at NED point: ", home_location)
-send_command("/movement/go_to_ned", params={"x": home_location[0],
-                                            "y": home_location[1],
-                                            "z": home_location[2]+SAFE_OFFSET},
-                                            method="POST")
+# --- Leg 3: Delivery -> Home ---
+home_relative = (0, 0, 0)
+print(f"Returning to home...")
+target_abs = go_to_relative(session, base_url, home_relative, home)
 time.sleep(SLEEP_DURATION)
 
-if wait_for_arrival(0,0,0):
-    print("Drone arrived near Home location")
+if wait_for_arrival(session, base_url, target_abs):
+    print("Drone arrived near home location.")
 time.sleep(SLEEP_DURATION)
 
-print("landing at Home location...")
-send_command("/command/land")
+print("Landing at home location...")
+send_command(session, base_url, "/command/land")
 time.sleep(SLEEP_DURATION)
 
-current_ned = send_command("/telemetry/ned")["info"]["position"]
-current_ned_point = (current_ned["x"]-home_location[0],
-                     current_ned["y"]-home_location[1],
-                     current_ned["z"]-home_location[2])
-print("Current NED position after landing: ", current_ned_point)
-
-print("Mission Accomplished")
+print("Mission accomplished.")
