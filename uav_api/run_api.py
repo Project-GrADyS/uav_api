@@ -26,7 +26,6 @@ def run_with_args(raw_args=None):
         config.accesslog = "-"
         config.errorlog = "-"
         config.logconfig_dict = log_config
-        config.use_reloader = True
 
         hypercorn_run(config)
     else:
@@ -35,7 +34,6 @@ def run_with_args(raw_args=None):
             host="0.0.0.0",
             port=args.port,
             log_level="debug",
-            reload=True,
         )
 
 def spawn_with_args(raw_args=None):
