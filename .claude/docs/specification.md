@@ -454,3 +454,27 @@ Takes a photo using a whitelisted camera CLI tool. The tool must be installed on
 - `400` — disallowed command or invalid resolution format
 - `500` — capture command failed (stderr included in detail)
 - `504` — command timed out (fixed 30s limit)
+
+---
+
+### `POST /peripherical/servo_output`
+Sends a PWM signal to a servo motor connected to one of the flight controller's actuator ports. Uses the MAVLink `MAV_CMD_DO_SET_SERVO` command.
+
+**Request body:**
+```json
+{"channel": 9, "pwm": 1500}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `channel` | int | Servo channel (1-based, matches the flight controller actuator port) |
+| `pwm` | int | PWM value in microseconds (typically 1000–2000) |
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "result": "Servo 9 set to 1500 PWM"}
+```
+
+**Errors:**
+- `422` — missing or invalid parameters
+- `500` — MAVLink command failed

@@ -59,7 +59,7 @@ Thin wrappers around `requests` with a 10-second timeout and the base URL (`http
 | `tests/movement_test.py` | `/movement` | 6 | `travel_at_ned`, `go_to_ned`, `drive`, `go_to_gps`, `stop` (each with variants) |
 | `tests/telemetry_test.py` | `/telemetry` | 10 | All 10 telemetry endpoints — general, gps, gps_raw, ned, compass, sys_status, sensor_status, battery_info, error_info, home_info |
 | `tests/mission_test.py` | `/mission` | 8 | Upload (.py, .sh, invalid extension), list, execute (existing + missing), clear, list after clear |
-| `tests/peripherical_test.py` | `/peripherical` | 3 | `take_photo` input validation — disallowed command, invalid resolution, missing param |
+| `tests/peripherical_test.py` | `/peripherical` | 5 | `take_photo` input validation (disallowed command, invalid resolution, missing param); `servo_output` (success, missing params) |
 
 ## Endpoint Coverage
 
@@ -69,8 +69,8 @@ Thin wrappers around `requests` with a 10-second timeout and the base URL (`http
 | movement | 11 | 5 | `go_to_gps_wait`, `go_to_ned_wait`, `drive_wait`, `set_heading`, `set_yaw_rate`, `resume` |
 | telemetry | 10 | 10 | — |
 | mission | 4 | 4 | — |
-| peripherical | 1 | 1 | — |
-| **Total** | **36** | **30** | **6** |
+| peripherical | 2 | 2 | — |
+| **Total** | **37** | **31** | **6** |
 
 The untested movement endpoints are the `_wait` variants (blocking versions of tested async endpoints), heading/yaw-rate setters, and `resume`.
 

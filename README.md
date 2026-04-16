@@ -9,7 +9,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
 - Mission scripting: upload, list, and execute `.py`/`.sh` scripts remotely
 - Gradys Ground Station integration: periodic GPS location push
 - Visual feedback via Mission Planner or any MAVLink GCS
-- Camera peripheral support
+- Hardware peripherals: camera capture, servo PWM output
 - Configurable logging per component
 
 ## Table of Contents
@@ -36,6 +36,12 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
   - [Logging System](#logging-system)
   - [Mission Script Management](#mission-script-management)
   - [Camera Peripheral](#camera-peripheral)
+  - [Servo Output](#servo-output)
+- [Project Architecture](#project-architecture)
+  - [Module Map](#module-map)
+  - [Processes and Coroutines](#processes-and-coroutines)
+  - [Dependency Injection](#dependency-injection)
+  - [API Response Format](#api-response-format)
 - [Flying through scripts](#flying-through-scripts)
   - [Running examples](#running-examples)
   - [Simple Takeoff and Landing](#simple-takeoff-and-landing)
@@ -46,11 +52,6 @@ HTTP REST API for controlling ArduPilot-compatible UAVs (QuadCopters). Supports 
   - [Make polygon with Drive](#make-polygon-with-drive)
   - [Delivery Mission Simulation](#delivery-mission-simulation)
   - [GPS-Based Follower](#gps-based-follower)
-- [Project Architecture](#project-architecture)
-  - [Module Map](#module-map)
-  - [Processes and Coroutines](#processes-and-coroutines)
-  - [Dependency Injection](#dependency-injection)
-  - [API Response Format](#api-response-format)
 
 ---
 
@@ -382,6 +383,100 @@ curl "http://localhost:8000/peripherical/take_photo?command=libcamera-still&capt
 ```
 
 Returns the image as `image/jpeg` (`Content-Disposition: attachment; filename="photo.jpg"`).
+
+## Servo Output
+
+Send a PWM signal to a servo motor connected to one of the flight controller's actuator ports. Uses the MAVLink `DO_SET_SERVO` command.
+
+**Endpoint:** `POST /peripherical/servo_output`
+
+**Request body:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `channel` | int | Servo channel (1-based, matches the flight controller actuator port) |
+| `pwm` | int | PWM value in microseconds (typically 1000–2000) |
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/peripherical/servo_output" \
+  -H "Content-Type: application/json" \
+  -d '{"channel": 9, "pwm": 1500}'
+```
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "result": "Servo 9 set to 1500 PWM"}
+```
+
+---
+
+# Project Architecture
+
+## Module Map
+
+| Path | Purpose |
+|------|---------|
+| `uav_api/run_api.py` | CLI entry point — parses args, runs setup, launches uvicorn |
+| `uav_api/api_app.py` | FastAPI app definition and lifespan (startup/shutdown logic) |
+| `uav_api/copter.py` | Core vehicle abstraction — all MAVLink logic (~1850 lines) |
+| `uav_api/args.py` | CLI argument parsing; config serialized to `UAV_ARGS` env var |
+| `uav_api/router_dependencies.py` | Singleton `Copter` instance and `args` via `Depends()` |
+| `uav_api/gradys_gs.py` | Async coroutine that POSTs GPS location to Gradys GS every second |
+| `uav_api/log.py` | Logger configuration (file + console, per-component) |
+| `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ArduPilot config) |
+| `uav_api/routers/command.py` | Endpoints: arm, takeoff, land, RTL, speed, home |
+| `uav_api/routers/movement.py` | Endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
+| `uav_api/routers/telemetry.py` | Endpoints: GPS, NED, compass, battery, sensor status, home info |
+| `uav_api/routers/mission.py` | Endpoints: upload-script, list-scripts, execute-script |
+| `uav_api/routers/peripherical.py` | Endpoints: take_photo, servo_output |
+| `uav_api/classes/pos.py` | Pydantic models: `GPS_pos`, `Local_pos` |
+| `uav_api/classes/peripherical.py` | Pydantic model: `Servo_output` |
+| `uav_api/classes/script.py` | Pydantic model: `Script` |
+| `flight_examples/` | Example client scripts and INI config files |
+
+## Processes and Coroutines
+
+The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespan. The following are started on API startup and stopped on shutdown:
+
+### Always started
+
+**uvicorn HTTP server**
+Launched by `uav_api/run_api.py`. All processes below run within its lifetime.
+
+**MAVLink drain loop**
+An `asyncio` task running `copter.run_drain_mav_loop()`. Continuously drains buffered MAVLink messages to prevent connection stalls. Cancelled on shutdown.
+
+### Conditional: simulated mode (`--simulated true`)
+
+**ArduCopter SITL process**
+Spawned as `xterm -e sim_vehicle.py -v ArduCopter ...` subprocess. Tagged with a unique environment variable (`UAV_SITL_TAG=SITL_ID_<sysid>`). On shutdown, all system processes carrying that tag are killed via `psutil`, ensuring clean teardown even if xterm spawned child processes.
+
+### Conditional: Gradys GS integration (`--gradys_gs` is set)
+
+**GS location push coroutine**
+An `asyncio` task running `send_location_to_gradys_gs()` (defined in `uav_api/gradys_gs.py`). POSTs the vehicle's GPS position to `http://<gradys_gs>/update-info/` every second using a shared `aiohttp.ClientSession`. Task is cancelled and the session is closed on shutdown.
+
+## Dependency Injection
+
+A single `Copter` instance and a single `args` namespace are held as module-level globals in `uav_api/router_dependencies.py`. All routers receive them via FastAPI's `Depends()`:
+
+```python
+Depends(get_copter_instance)  # shared Copter (one MAVLink connection)
+Depends(get_args)             # parsed CLI/config arguments
+```
+
+CLI arguments are serialized to JSON in the `UAV_ARGS` environment variable before uvicorn forks, allowing all processes to access the same configuration without re-parsing.
+
+## API Response Format
+
+All successful responses follow a uniform envelope:
+
+```json
+{"device": "uav", "id": "<sysid>", "result": "..."}
+```
+
+Telemetry endpoints add an `"info": {...}` field with the sensor data. All errors raise `HTTP 500` with a descriptive `"detail"` string.
 
 ---
 
@@ -1098,73 +1193,3 @@ if __name__ == "__main__":
         loop(follower_session, follower_base_url,
              leader_session, leader_base_url, home_alt, leader_home_alt, args)
 ```
-
-
-
----
-
-# Project Architecture
-
-## Module Map
-
-| Path | Purpose |
-|------|---------|
-| `uav_api/run_api.py` | CLI entry point — parses args, runs setup, launches uvicorn |
-| `uav_api/api_app.py` | FastAPI app definition and lifespan (startup/shutdown logic) |
-| `uav_api/copter.py` | Core vehicle abstraction — all MAVLink logic (~1850 lines) |
-| `uav_api/args.py` | CLI argument parsing; config serialized to `UAV_ARGS` env var |
-| `uav_api/router_dependencies.py` | Singleton `Copter` instance and `args` via `Depends()` |
-| `uav_api/gradys_gs.py` | Async coroutine that POSTs GPS location to Gradys GS every second |
-| `uav_api/log.py` | Logger configuration (file + console, per-component) |
-| `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ArduPilot config) |
-| `uav_api/routers/command.py` | Endpoints: arm, takeoff, land, RTL, speed, home |
-| `uav_api/routers/movement.py` | Endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
-| `uav_api/routers/telemetry.py` | Endpoints: GPS, NED, compass, battery, sensor status, home info |
-| `uav_api/routers/mission.py` | Endpoints: upload-script, list-scripts, execute-script |
-| `uav_api/routers/peripherical.py` | Endpoints: take_photo |
-| `uav_api/classes/pos.py` | Pydantic models: `GPS_pos`, `Local_pos` |
-| `uav_api/classes/script.py` | Pydantic model: `Script` |
-| `flight_examples/` | Example client scripts and INI config files |
-
-## Processes and Coroutines
-
-The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespan. The following are started on API startup and stopped on shutdown:
-
-### Always started
-
-**uvicorn HTTP server**
-Launched by `uav_api/run_api.py`. All processes below run within its lifetime.
-
-**MAVLink drain loop**
-An `asyncio` task running `copter.run_drain_mav_loop()`. Continuously drains buffered MAVLink messages to prevent connection stalls. Cancelled on shutdown.
-
-### Conditional: simulated mode (`--simulated true`)
-
-**ArduCopter SITL process**
-Spawned as `xterm -e sim_vehicle.py -v ArduCopter ...` subprocess. Tagged with a unique environment variable (`UAV_SITL_TAG=SITL_ID_<sysid>`). On shutdown, all system processes carrying that tag are killed via `psutil`, ensuring clean teardown even if xterm spawned child processes.
-
-### Conditional: Gradys GS integration (`--gradys_gs` is set)
-
-**GS location push coroutine**
-An `asyncio` task running `send_location_to_gradys_gs()` (defined in `uav_api/gradys_gs.py`). POSTs the vehicle's GPS position to `http://<gradys_gs>/update-info/` every second using a shared `aiohttp.ClientSession`. Task is cancelled and the session is closed on shutdown.
-
-## Dependency Injection
-
-A single `Copter` instance and a single `args` namespace are held as module-level globals in `uav_api/router_dependencies.py`. All routers receive them via FastAPI's `Depends()`:
-
-```python
-Depends(get_copter_instance)  # shared Copter (one MAVLink connection)
-Depends(get_args)             # parsed CLI/config arguments
-```
-
-CLI arguments are serialized to JSON in the `UAV_ARGS` environment variable before uvicorn forks, allowing all processes to access the same configuration without re-parsing.
-
-## API Response Format
-
-All successful responses follow a uniform envelope:
-
-```json
-{"device": "uav", "id": "<sysid>", "result": "..."}
-```
-
-Telemetry endpoints add an `"info": {...}` field with the sensor data. All errors raise `HTTP 500` with a descriptive `"detail"` string.

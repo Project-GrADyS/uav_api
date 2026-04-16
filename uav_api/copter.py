@@ -1913,6 +1913,15 @@ Also, ignores heartbeats not from our target system"""
 
         self.run_cmd(MAV_CMD_DO_SET_HOME, 1, 0, 0, 0, 0, 0, 0, timeout=timeout)
 
+    def set_servo(self, channel, pwm):
+        """Send a PWM signal to a servo on the given channel."""
+        self.run_cmd(
+            mavutil.mavlink.MAV_CMD_DO_SET_SERVO,
+            channel,  # p1: servo channel (1-based)
+            pwm,      # p2: PWM value in microseconds
+            0, 0, 0, 0, 0,
+        )
+
     async def run_drain_mav_loop(self, interval=0.1):
         """Asynchronous loop to continuously drain MAVLink messages."""
         while True:

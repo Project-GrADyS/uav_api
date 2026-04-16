@@ -9,7 +9,7 @@ the validation paths (disallowed commands, invalid resolution, missing
 required parameters).
 """
 
-from conftest import get
+from conftest import get, post
 
 
 class TestTakePhotoValidation:
@@ -28,4 +28,18 @@ class TestTakePhotoValidation:
 
     def test_missing_command_param(self, api_server):
         r = get("/peripherical/take_photo")
+        assert r.status_code == 422
+
+
+class TestServoOutput:
+
+    def test_servo_output(self, api_server):
+        r = post("/peripherical/servo_output", json={"channel": 9, "pwm": 1500})
+        assert r.status_code == 200
+        body = r.json()
+        assert "servo" in body["result"].lower()
+        assert "1500" in body["result"]
+
+    def test_servo_output_missing_params(self, api_server):
+        r = post("/peripherical/servo_output", json={})
         assert r.status_code == 422

@@ -2,10 +2,15 @@ import os
 import re
 import tempfile
 import subprocess
+from argparse import Namespace
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
+
+from uav_api.copter import Copter
+from uav_api.classes.peripherical import Servo_output
+from uav_api.router_dependencies import get_copter_instance, get_args
 
 peripherical_router = APIRouter(
     prefix="/peripherical",
@@ -75,3 +80,16 @@ def take_photo(
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
         raise HTTPException(status_code=500, detail=f"TAKE_PHOTO_FAIL: {e}")
+
+
+@peripherical_router.post("/servo_output", tags=["peripherical"],
+                           summary="Sends a PWM signal to a servo motor")
+def servo_output(servo: Servo_output,
+                 uav: Copter = Depends(get_copter_instance),
+                 args: Namespace = Depends(get_args)):
+    try:
+        uav.set_servo(servo.channel, servo.pwm)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SERVO_OUTPUT FAIL: {e}")
+    return {"device": "uav", "id": str(args.sysid),
+            "result": f"Servo {servo.channel} set to {servo.pwm} PWM"}
