@@ -1,5 +1,13 @@
 # API Specification
 
+> **Ecosystem contract.** This document is the authoritative HTTP contract for uav_api. The sibling projects consume it:
+>
+> - **gradys-embedded** calls `/command`, `/movement`, and `/telemetry/gps` from each drone's local uav_api process. See `/home/fleury/gradys/major_projects/gradys-embedded/.claude/docs/mobility-and-telemetry.md` — explains how `MobilityCommand` is mapped onto these endpoints.
+> - **gradys-gs** calls `/command`, `/telemetry/*`, and `/mission/*` during mission coordination. See `/home/fleury/gradys/major_projects/gradys-gs/.claude/docs/external_integrations.md` — explains how UI commands are dispatched over HTTP.
+> - **gradys-sim-nextgen** protocols are deployed through gradys-embedded, so they reach these endpoints indirectly.
+>
+> When modifying an endpoint (path, query params, body, response shape), update this spec first, then update every consumer. Consumers must not redefine endpoints — they point here.
+
 Base URL: `http://localhost:<port>`
 Interactive docs: `http://localhost:<port>/docs`
 

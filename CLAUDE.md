@@ -117,11 +117,26 @@ All arguments defined in `uav_api/args.py`. Can also be provided via INI config 
 > QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-signed certs are auto-generated in `~/uav_api_certs/`.
 
 ## Key Entry Points
-- CLI entry: `uav_api/run_api.py` → starts uvicorn (default) or hypercorn (`--udp`)
+- CLI entry: `uav_api/run_api.py` — starts uvicorn (default) or hypercorn (`--udp`)
 - App definition: `uav_api/api_app.py:57` (lifespan) and `:126` (app + router registration)
 - Copter class: `uav_api/copter.py:110`
 - Dependency injection: `uav_api/router_dependencies.py:8`
 
-## Additional Documentation
-- `.claude/docs/architectural_patterns.md` — design decisions, patterns, conventions
-- `.claude/docs/specification.md` — full API endpoint spec (inputs, outputs, behavior)
+## When to open which doc
+
+Each `.claude/docs/*.md` is scoped tightly. Open only the ones that match your task.
+
+- `→ .claude/docs/specification.md` — **authoritative HTTP contract** for the whole GrADyS ecosystem (gradys-embedded and gradys-gs consume this spec). Endpoint paths, query/body schemas, response envelopes. Open when adding or changing any endpoint.
+- `→ .claude/docs/architectural_patterns.md` — lifespan, singleton `Copter` injection, drain loop, endpoint pair (fire-and-forget vs `_wait`) conventions, `copter.py` method naming (`send_/wait_/run_/get_/set_`), uniform response envelope, tmux script execution. Open when changing app structure or writing a new router.
+- `→ .claude/docs/dev-and-run.md` — install steps (incl. ArduPilot/xterm/tmux), simulated and real-drone run commands, INI config file use, log flags, SITL/tmux interactive debugging, common failure modes. Open when setting up a machine or debugging a startup problem.
+- `→ .claude/docs/flight-examples-map.md` — index of every script under `flight_examples/`: flight pattern, endpoints exercised, shared helper functions, rules for writing new examples. Open when adding or porting a client script.
+- `→ .claude/docs/mavlink-and-coordinate-frames.md` — GPS vs NED vs NED-velocity, why `z` is negative, SITL xterm/UAV_SITL_TAG quirks, `udpin`/`udpout`/`usb` tradeoffs, heartbeat/streamrate/drain loop interactions, common MAVLink pitfalls. Open when touching movement/telemetry logic or debugging a connection/position issue.
+- `→ .claude/docs/tests.md` — session-scoped SITL fixture, `conftest` helpers (`get`/`post`/`delete`/`wait_for_altitude`), per-file coverage table, rules for adding new integration tests. Open when writing or modifying a test.
+
+## Consumers of this API (cross-project)
+
+`specification.md` is the ecosystem HTTP contract. The following sibling projects depend on it — update the spec first, then the consumers.
+
+- `→ /home/fleury/gradys/major_projects/gradys-embedded/` — runs simulator protocols on real drones; each drone runs its own uav_api process and gradys-embedded calls `/command/*`, `/movement/*`, `/telemetry/gps` over localhost.
+- `→ /home/fleury/gradys/major_projects/gradys-gs/` — Django mission-control web UI; dispatches `/command/*`, `/telemetry/*`, `/mission/*` from browser actions.
+- `→ /home/fleury/gradys/major_projects/gradys-sim-nextgen/` — reaches uav_api indirectly via gradys-embedded during real-world deployment.
