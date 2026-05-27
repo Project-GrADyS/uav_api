@@ -133,7 +133,7 @@ async def lifespan(app: FastAPI):
         print("Gradys GS location task closed.")
 app = FastAPI(
     title="Uav_API",
-    summary=f"API designed to simplify Copter control for Ardupilot UAVs (for now only QuadCopter is supported).",
+    summary=f"API designed to simplify vehicle control for Ardupilot UAVs.",
     description=description,
     version="0.1.3",
     openapi_tags=metadata,
