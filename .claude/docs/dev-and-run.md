@@ -22,10 +22,14 @@ First-run setup (idempotent, executed from `uav_api/setup.py`) writes:
 
 ## Run — simulated (recommended starting point)
 
-Spawns ArduCopter SITL in an `xterm`, waits for it to come up, then the API connects to it over UDP.
+Spawns ArduPilot SITL in an `xterm`, waits for it to come up, then the API connects to it over UDP. The binary spawned (`-v ArduCopter` vs `-v ArduPlane`) is chosen by `--vehicle`.
 
 ```bash
+# Copter (default)
 uav-api --simulated true --ardupilot_path ~/ardupilot --speedup 1 --port 8000 --sysid 1
+
+# Plane (beta — see plane-support.md)
+uav-api --vehicle plane --simulated true --ardupilot_path ~/ardupilot --speedup 1 --port 8000 --sysid 1
 ```
 
 Or via INI file (sections `[api]`, `[simulated]`, `[logs]`):
@@ -64,12 +68,12 @@ By default, logs are per-component and written to file + console depending on fl
 
 | Flag | Effect |
 |------|--------|
-| `--log_console COPTER API GRADYS_GS` | Print these components' logs to stdout |
-| `--debug COPTER API` | Same component names, but at DEBUG level |
+| `--log_console VEHICLE API GRADYS_GS` | Print these components' logs to stdout |
+| `--debug VEHICLE API` | Same component names, but at DEBUG level |
 | `--log_path /tmp/uav_api.log` | Write all component logs combined to this file |
 | `--script_logs ~/uav_logs/` | Redirect `/mission/execute-script` stdout/stderr to timestamped files here |
 
-The component name to log level plumbing lives in `uav_api/log.py`. In `--udp` (Hypercorn) mode, that module also builds Hypercorn's log-config dict.
+The component name to log level plumbing lives in `uav_api/log.py`. The `VEHICLE` token routes to the active vehicle's logger (`COPTER` or `PLANE`); the printed prefix is `[COPTER-<sysid>]` or `[PLANE-<sysid>]` depending on `--vehicle`. In `--udp` (Hypercorn) mode, that module also builds Hypercorn's log-config dict.
 
 ## Interactive debugging
 
@@ -90,14 +94,17 @@ Re-executing the endpoint sends `Ctrl+C` to the session before launching the new
 | Symptom | Likely cause |
 |---------|--------------|
 | `/telemetry/general` times out on startup (simulated) | `~/ardupilot` path wrong, or `xterm` not on PATH. Check the xterm window — SITL errors print there. |
-| Arm endpoint hangs forever | GPS fix not yet acquired (especially on cold start). `GET /telemetry/gps_raw` shows `satelites` count. |
+| Arm endpoint hangs forever | GPS fix not yet acquired (especially on cold start). `GET /telemetry/gps_raw` shows `satelites` count (copter mode only). |
+| `/mission/*` or `/peripherical/*` returns 404 in plane mode | Expected — these routers are not registered when `--vehicle plane`. See plane-support.md. |
+| `/command/takeoff` returns 500 (plane mode) | Often a parameter / TAKEOFF-mode issue. SITL xterm log shows the specific reason. ArduPlane requires the vehicle to be armed (call `/command/arm` first). |
 | NED `z` values look inverted | NED is North-East-**Down**. Negative `z` = altitude above HOME. See mavlink-and-coordinate-frames.md — explains the NED sign convention and GPS↔NED translation. |
 | `--udp` fails with TLS error | Missing or stale certs in `~/uav_api_certs/`. Delete and rerun; certs are auto-regenerated. |
 | Shutdown leaves SITL/xterm running | Should not happen — `UAV_SITL_TAG` kills the tree. If it does, `pkill -f sim_vehicle` is the manual cleanup. |
 
 ## Related docs
 
-- `/home/fleury/gradys/major_projects/uav_api/.claude/docs/specification.md` — authoritative HTTP endpoint contract (request/response shapes).
-- `/home/fleury/gradys/major_projects/uav_api/.claude/docs/architectural_patterns.md` — lifespan, singleton injection, endpoint pair conventions, naming.
+- `/home/fleury/gradys/major_projects/uav_api/.claude/docs/specification.md` — authoritative HTTP endpoint contract (copter mode).
+- `/home/fleury/gradys/major_projects/uav_api/.claude/docs/plane-support.md` — plane (beta) endpoint reference and behavioural delta.
+- `/home/fleury/gradys/major_projects/uav_api/.claude/docs/architectural_patterns.md` — lifespan, singleton injection, vehicle selection, endpoint pair conventions, naming.
 - `/home/fleury/gradys/major_projects/uav_api/.claude/docs/flight-examples-map.md` — index of runnable client scripts under `flight_examples/`.
-- `/home/fleury/gradys/major_projects/uav_api/.claude/docs/tests.md` — how the integration suite drives a live SITL instance.
+- `/home/fleury/gradys/major_projects/uav_api/.claude/docs/tests.md` — how the integration suite drives a live SITL instance (copter only).

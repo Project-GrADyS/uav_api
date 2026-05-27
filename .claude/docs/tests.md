@@ -4,6 +4,8 @@
 
 All tests are **integration tests** that run against a live ArduPilot SITL (Software-In-The-Loop) instance. There are no unit tests or mocked dependencies — every request hits a real running API server backed by a simulated drone.
 
+> **Scope: Copter only.** The fixture below spawns `--vehicle copter` (default) — ArduCopter SITL. Plane (`--vehicle plane`, beta) has no integration tests yet; see `plane-support.md`.
+
 The test process spawns the full API server in a child process via `uav_api/run_api.py:spawn_with_args()`, which calls `multiprocessing.Process(target=run_with_args)`. Tests communicate with the server over HTTP using the `requests` library, exactly as a real client would.
 
 ```

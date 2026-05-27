@@ -8,6 +8,8 @@
 >
 > When modifying an endpoint (path, query params, body, response shape), update this spec first, then update every consumer. Consumers must not redefine endpoints — they point here.
 
+> **Scope: `--vehicle copter` (default).** This file documents the endpoint set registered in copter mode. Plane mode (`--vehicle plane`, beta) shares the same URL prefixes (`/command`, `/movement`, `/telemetry`) but exposes a smaller subset and behaves differently in places (e.g. takeoff path, RTL completion, no `/mission` or `/peripherical`). See `plane-support.md` for the plane endpoint reference and behavioural delta.
+
 Base URL: `http://localhost:<port>`
 Interactive docs: `http://localhost:<port>/docs`
 

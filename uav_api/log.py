@@ -78,6 +78,10 @@ def set_log_config(args):
                 'level': 'INFO',
                 'handlers': []
             },
+            'PLANE': {
+                'level': 'INFO',
+                'handlers': []
+            },
             "uvicorn": {
                 'level': 'INFO',
                 'handlers': []
@@ -106,8 +110,11 @@ def set_log_config(args):
         for logger in logging_config['loggers'].values():
             logger['handlers'].append('file_handler')
 
-    if "COPTER" in args.log_console:
-        logging_config['loggers']["COPTER"]['handlers'].append('console_handler')
+    if "VEHICLE" in args.log_console:
+        if "plane" == args.vehicle:
+            logging_config['loggers']["PLANE"]['handlers'].append('console_handler')
+        else:
+            logging_config['loggers']["COPTER"]['handlers'].append('console_handler')
     if "API" in args.log_console:
         logging_config['loggers']["uvicorn"]['handlers'].append('console_handler')
         logging_config['loggers']["uvicorn.access"]['handlers'].append('console_handler')
@@ -115,8 +122,11 @@ def set_log_config(args):
     if "GRADYS_GS" in args.log_console:
         logging_config['loggers']["GRADYS_GS"]['handlers'].append('console_handler')
 
-    if "COPTER" in args.debug:
-        logging_config['loggers']["COPTER"]['level'] = "DEBUG"
+    if "VEHICLE" in args.debug:
+        if "plane" == args.vehicle:
+            logging_config['loggers']["PLANE"]['level'] = "DEBUG"
+        else:
+            logging_config['loggers']["COPTER"]['level'] = "DEBUG"
     if "API" in args.debug:
         logging_config['loggers']["uvicorn"]['level'] = "DEBUG"
         logging_config['loggers']["uvicorn.access"]['level'] = "DEBUG"

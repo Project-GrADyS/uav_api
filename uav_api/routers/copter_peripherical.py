@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
-from uav_api.copter import Copter
+from uav_api.vehicles.copter import Copter
 from uav_api.classes.peripherical import Servo_output
-from uav_api.router_dependencies import get_copter_instance, get_args
+from uav_api.routers.router_dependencies import get_copter_instance, get_args
 
 copter_peripherical_router = APIRouter(
     prefix="/peripherical",

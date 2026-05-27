@@ -2,7 +2,7 @@
 
 ## Background Processes and Coroutines
 
-The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespan in `uav_api/api_app.py:57`. It starts and stops the following processes/tasks:
+The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespan in `uav_api/api_app.py:60`. It starts and stops the following processes/tasks:
 
 ### Always started
 
@@ -10,40 +10,62 @@ The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespa
 - Launched by `uav_api/run_api.py`
 - The lifespan context manages everything below within uvicorn's lifetime
 
-**MAVLink drain loop** (`api_app.py:87`)
-- `asyncio.create_task(copter.run_drain_mav_loop())`
+**MAVLink drain loop** (`api_app.py:95`)
+- `asyncio.create_task(vehicle.run_drain_mav_loop())` where `vehicle` is the active singleton (Copter or Plane, picked by `--vehicle`)
 - Continuously drains buffered MAVLink messages to prevent connection stalls
 - Runs for the entire API lifetime; cancelled on shutdown (`drain_mav_loop.cancel()`)
 
 ### Conditional: simulated mode only (`--simulated true`)
 
-**ArduCopter SITL process** (`api_app.py:78-81`)
-- Spawns `xterm -e sim_vehicle.py -v ArduCopter ...` as a subprocess
+**ArduPilot SITL process** (`api_app.py:81-85`)
+- Spawns `xterm -e sim_vehicle.py -v {ArduCopter|ArduPlane} ...` as a subprocess; the vehicle binary is chosen by `args.vehicle` (line 81: `ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`)
 - Tagged with a unique `UAV_SITL_TAG=SITL_ID_<sysid>` environment variable
-- On shutdown, all system processes with that env tag are killed via `psutil` (`api_app.py:43-55`)
+- On shutdown, all system processes with that env tag are killed via `psutil` (`api_app.py:46-58`)
 - Allows clean teardown even if xterm spawned child processes
 
 ### Conditional: Gradys GS integration only (`--gradys_gs` is set)
 
-**GS location push coroutine** (`api_app.py:93`)
-- `asyncio.create_task(send_location_to_gradys_gs(copter, session, ...))`
-- Defined in `uav_api/gradys_gs.py:35` — POSTs GPS position to `http://<gradys_gs>/update-info/` every second
+**GS location push coroutine** (`api_app.py:101`)
+- `asyncio.create_task(send_location_to_gradys_gs(vehicle, session, ...))`
+- Defined in `uav_api/gradys_gs.py:35` — POSTs GPS position to `http://<gradys_gs>/update-info/` every second. Duck-types on `.get_gps_info()` and `.target_system`, which both `Copter` and `Plane` expose.
 - Uses a shared `aiohttp.ClientSession`; session is closed on shutdown after task cancellation
 
 ---
 
 ## Singleton Dependency Injection
 
-**Pattern**: `uav_api/router_dependencies.py:5-13`
+**Pattern**: `uav_api/routers/router_dependencies.py`
 
-A single `Copter` instance and a single `args` namespace are held as module-level globals. All routers receive them via FastAPI's `Depends()`:
+Module-level globals hold one `Copter`, one `Plane`, and one `args` namespace. Routers pick the right vehicle via FastAPI's `Depends()`:
 
 ```python
-Depends(get_copter_instance)  # returns the shared Copter
-Depends(get_args)             # returns parsed CLI/config args
+Depends(get_copter_instance)  # shared Copter — used by copter_* routers
+Depends(get_plane_instance)   # shared Plane  — used by plane_*  routers
+Depends(get_args)             # parsed CLI/config args
 ```
 
-This ensures one MAVLink connection is shared across all endpoints.
+Only one vehicle singleton is instantiated per process (in the lifespan, conditional on `args.vehicle`), so there is one MAVLink connection regardless of which routers are mounted. The unused `get_*_instance` is never called and stays `None`.
+
+## Vehicle Selection (`--vehicle`)
+
+**Pattern**: `uav_api/api_app.py:142-150`
+
+`--vehicle {copter|plane}` (default `copter`, defined in `args.py:parse_mode`) controls which router set is registered:
+
+```python
+if args.vehicle == "plane":
+    app.include_router(plane_command_router)
+    app.include_router(plane_movement_router)
+    app.include_router(plane_telemetry_router)
+else:
+    app.include_router(command_router)      # alias for copter_command_router
+    app.include_router(telemetry_router)
+    app.include_router(movement_router)
+    app.include_router(mission_router)
+    app.include_router(peripherical_router)
+```
+
+The router sets share URL prefixes (`/command`, `/movement`, `/telemetry`) so HTTP consumers don't see a vehicle-type difference at the path level. Plane mode has no `mission` or `peripherical` routers and a smaller movement surface — see `plane-support.md`.
 
 ## Endpoint Pairs (Fire-and-Forget vs Blocking)
 
@@ -66,9 +88,9 @@ Movement commands come in pairs. The blocking (`_wait`) variant issues the comma
 
 The CLI `Namespace` is serialized to JSON and stored in the `UAV_ARGS` env var before the ASGI server starts. Since both uvicorn and hypercorn are invoked programmatically with the app as an import path string, the app module reads the env var back via `read_args_from_env()` at import time. This lets the FastAPI app and all routers access config without re-parsing CLI args.
 
-## Naming Conventions in `copter.py`
+## Naming Conventions in Vehicle Classes
 
-Method prefixes signal behavior (`uav_api/copter.py`):
+Method prefixes signal behavior. The convention is shared by `uav_api/vehicles/copter.py` and `uav_api/vehicles/plane.py`:
 
 | Prefix | Behavior |
 |--------|---------|

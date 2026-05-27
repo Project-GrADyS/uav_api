@@ -1,7 +1,7 @@
 from pathlib import Path
 from uav_api.args import read_args_from_env
-from uav_api.copter import Copter
-from uav_api.plane import Plane
+from uav_api.vehicles.copter import Copter
+from uav_api.vehicles.plane import Plane
 
 copter = None
 plane = None

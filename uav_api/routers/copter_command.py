@@ -1,8 +1,8 @@
 from argparse import Namespace
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from uav_api.copter import Copter
-from uav_api.router_dependencies import get_copter_instance, get_args
+from uav_api.vehicles.copter import Copter
+from uav_api.routers.router_dependencies import get_copter_instance, get_args
 
 copter_command_router = APIRouter(
     prefix = "/command",

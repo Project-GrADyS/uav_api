@@ -7,7 +7,7 @@ import subprocess
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from uav_api.router_dependencies import get_copter_instance, get_plane_instance
+from uav_api.routers.router_dependencies import get_copter_instance, get_plane_instance
 from uav_api.routers.copter_movement import copter_movement_router
 from uav_api.routers.copter_command import copter_command_router
 from uav_api.routers.copter_telemetry import copter_telemetry_router

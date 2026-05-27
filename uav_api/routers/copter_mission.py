@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, HTTPException, Depends
-from uav_api.router_dependencies import get_args
+from uav_api.routers.router_dependencies import get_args
 from uav_api.classes.script import Script
 
 copter_mission_router = APIRouter(

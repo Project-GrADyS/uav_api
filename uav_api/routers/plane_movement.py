@@ -1,7 +1,7 @@
 from argparse import Namespace
 from fastapi import APIRouter, Depends, HTTPException
-from uav_api.plane import Plane
-from uav_api.router_dependencies import get_plane_instance, get_args
+from uav_api.vehicles.plane import Plane
+from uav_api.routers.router_dependencies import get_plane_instance, get_args
 from uav_api.classes.movement import Gps_pos
 
 plane_movement_router = APIRouter(
