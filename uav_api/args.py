@@ -75,6 +75,14 @@ def parse_mode(mode_parser):
         help="Configuration file for UAV execution"
     )
 
+    mode_parser.add_argument(
+        '--vehicle',
+        dest='vehicle',
+        choices=['copter', 'plane'],
+        default='copter',
+        help="Vehicle type. Selects which routers are registered and which ArduPilot SITL binary spawns."
+    )
+
 # API PARSER
 def parse_api(api_parser):
 

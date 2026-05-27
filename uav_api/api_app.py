@@ -7,12 +7,15 @@ import subprocess
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from uav_api.router_dependencies import get_copter_instance
-from uav_api.routers.movement import movement_router
-from uav_api.routers.command import command_router
-from uav_api.routers.telemetry import telemetry_router
-from uav_api.routers.peripherical import peripherical_router
-from uav_api.routers.mission import mission_router
+from uav_api.router_dependencies import get_copter_instance, get_plane_instance
+from uav_api.routers.copter_movement import copter_movement_router
+from uav_api.routers.copter_command import copter_command_router
+from uav_api.routers.copter_telemetry import copter_telemetry_router
+from uav_api.routers.copter_peripherical import copter_peripherical_router
+from uav_api.routers.copter_mission import copter_mission_router
+from uav_api.routers.plane_command import plane_command_router
+from uav_api.routers.plane_movement import plane_movement_router
+from uav_api.routers.plane_telemetry import plane_telemetry_router
 from uav_api.log import set_log_config
 from uav_api.args import read_args_from_env
 from uav_api.gradys_gs import send_location_to_gradys_gs
@@ -35,7 +38,7 @@ metadata = [
 ]
 
 description = f"""
-## COPTER INFORMATION
+## {args.vehicle.upper()}{" (BETA)"if args.vehicle == "plane" else ""} INFORMATION
 * SYSID = **{args.sysid}**
 * CONNECTION_STRING = **{args.uav_connection}**
 """
@@ -75,22 +78,27 @@ async def lifespan(app: FastAPI):
         out_str = f"--out {args.uav_connection} {' '.join([f'--out {address}' for address in args.gs_connection])} "
         home_dir = os.path.expanduser("~")
         ardupilot_logs = os.path.join(home_dir, "uav_api_logs", "ardupilot_logs")
-        sitl_command = f"xterm -e {script_path} -v ArduCopter -I {args.sysid} --sysid {args.sysid} -N -L {args.location} --speedup {args.speedup} {out_str} --use-dir={ardupilot_logs}"
+        ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"
+        sitl_command = f"xterm -e {script_path} -v {ardupilot_vehicle} -I {args.sysid} --sysid {args.sysid} -N -L {args.location} --speedup {args.speedup} {out_str} --use-dir={ardupilot_logs}"
         
         # Start the process with the custom environment
         sitl_process = subprocess.Popen(sitl_command.split(" "), env=env)
         print(f"SITL started with PID {sitl_process.pid}.")
-    copter = get_copter_instance(args.sysid, args.uav_connection if args.connection_type == "usb" else f"{args.connection_type}:{args.uav_connection}")
-    
+    conn = args.uav_connection if args.connection_type == "usb" else f"{args.connection_type}:{args.uav_connection}"
+    if args.vehicle == "plane":
+        vehicle = get_plane_instance(args.sysid, conn)
+    else:
+        vehicle = get_copter_instance(args.sysid, conn)
+
     # Starting task that will continuously drain MAVLink messages
     print("Starting Drain MAVLink loop...")
-    drain_mav_loop = asyncio.create_task(copter.run_drain_mav_loop())
+    drain_mav_loop = asyncio.create_task(vehicle.run_drain_mav_loop())
 
     # If defined, start location thread for Gradys Ground Station
     if args.gradys_gs is not None:
         print("Starting Gradys GS location task...")
         session = aiohttp.ClientSession()
-        location_task = asyncio.create_task(send_location_to_gradys_gs(copter, session, args.port, args.gradys_gs))
+        location_task = asyncio.create_task(send_location_to_gradys_gs(vehicle, session, args.port, args.gradys_gs))
     
     print("API is ready.")
     yield
@@ -131,8 +139,13 @@ app = FastAPI(
     openapi_tags=metadata,
     lifespan=lifespan
 )
-app.include_router(command_router)
-app.include_router(telemetry_router)
-app.include_router(movement_router)
-app.include_router(mission_router)
-app.include_router(peripherical_router)
+if args.vehicle == "plane":
+    app.include_router(plane_command_router)
+    app.include_router(plane_movement_router)
+    app.include_router(plane_telemetry_router)
+else:
+    app.include_router(copter_command_router)
+    app.include_router(copter_telemetry_router)
+    app.include_router(copter_movement_router)
+    app.include_router(copter_mission_router)
+    app.include_router(copter_peripherical_router)
