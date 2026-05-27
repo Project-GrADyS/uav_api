@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, HTTPException, Depends
-from uav_api.routers.router_dependencies import get_args
+from uav_api.routers.router_dependencies import get_args, get_scripts_table
 from uav_api.classes.script import Script
 
 copter_mission_router = APIRouter(
@@ -50,12 +50,15 @@ def list_scripts(args = Depends(get_args)):
     return {"device": "uav", "id": str(args.sysid), "type": 42, "scripts": scripts}
 
 @copter_mission_router.post("/execute-script/", tags=["mission"], summary="Executes a specified mission script")
-def execute_script(script: Script, args = Depends(get_args)):
+def execute_script(script: Script, args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
     # Prevent directory traversal and extract a simple filename
     safe_name = Path(script.script_name).name
     # Ensure .py extension
     if not safe_name.endswith(".py"):
         safe_name = safe_name + ".py"
+
+    if safe_name in scripts_table and scripts_table[safe_name].get("status") == "running":
+        raise HTTPException(status_code=400, detail=f"Script '{safe_name}' is already running.")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     script_base = os.path.splitext(safe_name)[0]  # Removes '.py' extension
@@ -69,34 +72,23 @@ def execute_script(script: Script, args = Depends(get_args)):
     if not script_path.exists() or not script_path.is_file():
         raise HTTPException(status_code=404, detail=f"Script '{safe_name}' not found.")
 
-    session_name = "api-script"
-    
-    # Check if the tmux session already exists
-    # '0' exit code means it exists
-    has_session = subprocess.run(["tmux", "has-session", "-t", session_name], 
-                                 capture_output=True)
-
-    if has_session.returncode != 0:
-        # 1. Create a new detached session
-        subprocess.run(["tmux", "new-session", "-d", "-s", session_name])
-        print(f"Session '{session_name}' started.")
-    else:
-        # 2. Session exists: Send Interrupt (Ctrl+C) to stop any running process
-        print(f"Session '{session_name}' already exists. Restarting script...")
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "C-c", "C-m"])
-        time.sleep(0.5) # Give it a moment to stop
-
-    # 3. Prepare the command sequence
-    # We chain commands with '&&' to ensure they run in order
+    session_name = f"api-script-{safe_name.replace('.', '_')}-{timestamp}"
+    # tmux owns the command lifecycle: when the python process exits, the
+    # session auto-terminates, which is what scripts_watcher_loop polls for.
     command = f"{args.python_path} {script_path} 1> {out_file} 2> {err_file}"
-    
-    # 4. Send the command to the session
-    subprocess.run(["tmux", "send-keys", "-t", session_name, command, "C-m"])
-    
+    subprocess.run(["tmux", "new-session", "-d", "-s", session_name, "bash", "-c", command])
+
+    scripts_table[safe_name] = {
+        "status": "running",
+        "session": session_name,
+        "started_at": timestamp,
+        "stopped_at": None,
+        "out_log": out_file,
+        "err_log": err_file,
+    }
     print(f"Running: {safe_name}")
     print(f"To view, use: tmux attach -t {session_name}")
 
-    # Return process info and log paths (absolute)
     return {
         "device": "uav",
         "id": str(args.sysid),
@@ -104,7 +96,45 @@ def execute_script(script: Script, args = Depends(get_args)):
         "script": safe_name,
     }
 
-@copter_mission_router.delete("/clear", tags=["mission"], summary="Removes all script files (.py and .sh) from the scripts directory")
+@copter_mission_router.get("/running-scripts", tags=["mission"], summary="Lists scripts currently running")
+def running_scripts(args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
+    scripts = [
+        {
+            "script": name,
+            "session": info["session"],
+            "started_at": info["started_at"],
+            "out_log": info["out_log"],
+            "err_log": info["err_log"],
+        }
+        for name, info in scripts_table.items()
+        if info.get("status") == "running"
+    ]
+    return {"device": "uav", "id": str(args.sysid), "type": 50, "scripts": scripts}
+
+@copter_mission_router.post("/stop-script/", tags=["mission"], summary="Stops a running mission script")
+def stop_script(script: Script, args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
+    safe_name = Path(script.script_name).name
+    if not safe_name.endswith(".py"):
+        safe_name = safe_name + ".py"
+
+    info = scripts_table.get(safe_name)
+    if info is None:
+        raise HTTPException(status_code=404, detail=f"Script '{safe_name}' not found in scripts table.")
+    if info.get("status") != "running":
+        raise HTTPException(status_code=400, detail=f"Script '{safe_name}' is not running.")
+
+    session_name = info["session"]
+    # Graceful: SIGINT lets the script's finally/atexit handlers run (e.g. land the drone).
+    subprocess.run(["tmux", "send-keys", "-t", session_name, "C-c", "C-m"])
+    time.sleep(1.0)
+    subprocess.run(["tmux", "kill-session", "-t", session_name], capture_output=True)
+
+    info["status"] = "stopped"
+    info["stopped_at"] = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    return {"device": "uav", "id": str(args.sysid), "type": 52, "script": safe_name, "info": "Stopped"}
+
+@copter_mission_router.delete("/clear-scripts", tags=["mission"], summary="Removes all script files (.py and .sh) from the scripts directory")
 def clear_scripts(args = Depends(get_args)):
     scripts_dir = Path(args.scripts_path).expanduser()
     try:

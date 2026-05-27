@@ -412,7 +412,7 @@ Lists all `.py` files currently in `scripts_path`.
 ---
 
 ### `POST /mission/execute-script/`
-Executes an uploaded script in a tmux session named `"api-script"`. Non-blocking — returns after launching.
+Executes an uploaded script in a uniquely-named tmux session and tracks it in an in-memory scripts table. Non-blocking — returns after launching.
 
 **Request body:**
 ```json
@@ -426,16 +426,59 @@ Executes an uploaded script in a tmux session named `"api-script"`. Non-blocking
 ```
 
 **Behavior:**
-- If session `"api-script"` already exists, sends `Ctrl+C` to stop the current script, then runs the new one
+- Each execution gets its own tmux session: `api-script-<script>-<timestamp>`
+- Session is owned by the script process (created with `tmux new-session -d -s <name> bash -c <command>`), so it auto-terminates when the script exits
+- The script is recorded in the in-memory scripts table with `status="running"`; a background watcher transitions it to `"stopped"` once the tmux session ends
 - stdout → `<script_logs>/<name>_<timestamp>_out.log`
 - stderr → `<script_logs>/<name>_<timestamp>_err.log`
-- Attach live: `tmux attach -t api-script`
+- Attach live: `tmux attach -t api-script-<script>-<timestamp>`
 
-**Errors:** 404 if script not found.
+**Errors:** 400 if the script is already running; 404 if the script file is not in `scripts_path`.
 
 ---
 
-### `DELETE /mission/clear`
+### `GET /mission/running-scripts`
+Returns the scripts currently in `status="running"` according to the in-memory scripts table.
+
+**Response:**
+```json
+{
+  "device": "uav", "id": "1", "type": 50,
+  "scripts": [
+    {
+      "script": "my_script.py",
+      "session": "api-script-my_script.py-20260528_143012",
+      "started_at": "20260528_143012",
+      "out_log": "/.../my_script_20260528_143012_out.log",
+      "err_log": "/.../my_script_20260528_143012_err.log"
+    }
+  ]
+}
+```
+
+> Stopped entries are retained in the scripts table for the lifetime of the API process but are not returned by this endpoint.
+
+---
+
+### `POST /mission/stop-script/`
+Stops a running mission script. Sends `Ctrl+C` to the tmux session (allowing `finally`/`atexit` handlers to run, e.g. landing the drone), waits ~1s, then kills the tmux session. Marks the entry `status="stopped"`.
+
+**Request body:**
+```json
+{"script_name": "my_script"}
+```
+> `.py` extension is appended if missing.
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "type": 52, "script": "my_script.py", "info": "Stopped"}
+```
+
+**Errors:** 404 if the script is unknown to the scripts table; 400 if it is in the table but not currently running.
+
+---
+
+### `DELETE /mission/clear-scripts`
 Deletes all `.py` and `.sh` files from the scripts directory.
 
 **Response:**

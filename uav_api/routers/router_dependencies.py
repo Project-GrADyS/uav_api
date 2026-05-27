@@ -6,6 +6,7 @@ from uav_api.vehicles.plane import Plane
 copter = None
 plane = None
 args = None
+scripts_table = None
 
 def get_copter_instance(sysid=None, connection=None):
     global copter
@@ -26,3 +27,9 @@ def get_args():
     if args is None:
         args = read_args_from_env()
     return args
+
+def get_scripts_table():
+    global scripts_table
+    if scripts_table is None:
+        scripts_table = {}
+    return scripts_table

@@ -5,9 +5,10 @@ import signal
 import psutil
 import subprocess
 
+from datetime import datetime
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from uav_api.routers.router_dependencies import get_copter_instance, get_plane_instance
+from uav_api.routers.router_dependencies import get_copter_instance, get_plane_instance, get_scripts_table
 from uav_api.routers.copter_movement import copter_movement_router
 from uav_api.routers.copter_command import copter_command_router
 from uav_api.routers.copter_telemetry import copter_telemetry_router
@@ -42,6 +43,25 @@ description = f"""
 * SYSID = **{args.sysid}**
 * CONNECTION_STRING = **{args.uav_connection}**
 """
+
+async def scripts_watcher_loop(scripts_table, interval=2.0):
+    """Polls tmux for entries marked running; transitions them to stopped when the session ends."""
+    while True:
+        try:
+            for name, info in list(scripts_table.items()):
+                if info.get("status") != "running":
+                    continue
+                session = info["session"]
+                has = subprocess.run(["tmux", "has-session", "-t", session], capture_output=True)
+                if has.returncode != 0:
+                    info["status"] = "stopped"
+                    info["stopped_at"] = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    # Defensive: kill in case the session is in a stuck state.
+                    subprocess.run(["tmux", "kill-session", "-t", session], capture_output=True)
+                    print(f"Script '{name}' detected as stopped.")
+        except Exception as e:
+            print(f"scripts_watcher_loop iteration error: {e}")
+        await asyncio.sleep(interval)
 
 def kill_sitl_by_tag(tag_value):
     """
@@ -94,6 +114,12 @@ async def lifespan(app: FastAPI):
     print("Starting Drain MAVLink loop...")
     drain_mav_loop = asyncio.create_task(vehicle.run_drain_mav_loop())
 
+    # Scripts watcher (copter only — mission router is not registered for plane)
+    scripts_watcher_task = None
+    if args.vehicle != "plane":
+        print("Starting scripts watcher loop...")
+        scripts_watcher_task = asyncio.create_task(scripts_watcher_loop(get_scripts_table()))
+
     # If defined, start location thread for Gradys Ground Station
     if args.gradys_gs is not None:
         print("Starting Gradys GS location task...")
@@ -118,6 +144,14 @@ async def lifespan(app: FastAPI):
         await drain_mav_loop
     except asyncio.CancelledError:
         print("Drain MAVLink loop has been cancelled.")
+
+    if scripts_watcher_task is not None:
+        print("Cancelling scripts watcher loop...")
+        scripts_watcher_task.cancel()
+        try:
+            await scripts_watcher_task
+        except asyncio.CancelledError:
+            print("Scripts watcher loop has been cancelled.")
 
     # Cancelling location coroutine if it was started
     if args.gradys_gs is not None:
