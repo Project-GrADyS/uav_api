@@ -136,7 +136,7 @@ This spawns ArduPlane SITL (instead of ArduCopter) and registers only the plane 
 
 Calls to copter-only routes (`/mission/*`, `/peripherical/*`, `/movement/go_to_ned`, etc.) return HTTP 404 in plane mode.
 
-### Logging in plane mode
+### Logging in different vehicles
 
 The CLI token used in `--log_console` and `--debug` is the vehicle-agnostic `VEHICLE` — the same flag value regardless of `--vehicle`. The internal logger that emits the records, however, is named after the vehicle: `COPTER` or `PLANE`. The console formatter prints `[<logger>-<sysid>]` as the prefix, so what you actually see depends on `--vehicle`:
 
@@ -273,7 +273,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--log_console` | `[]` | Components to print logs to console: `VEHICLE` `API` `GRADYS_GS`. `VEHICLE` is vehicle-agnostic — see [Logging in plane mode](#logging-in-plane-mode) for the prefix actually printed. |
+| `--log_console` | `[]` | Components to print logs to console: `VEHICLE` `API` `GRADYS_GS`. `VEHICLE` is vehicle-agnostic — see [Logging in different vehicles](#logging-in-different-vehicles) for the prefix actually printed. |
 | `--log_path` | None | File path to write all component logs combined |
 | `--debug` | `[]` | Same component names as `--log_console` but at DEBUG verbosity |
 | `--script_logs` | None | Directory where script stdout/stderr are saved as timestamped `.log` files |
@@ -361,7 +361,7 @@ uav-api --debug VEHICLE ...
 uav-api --script_logs ~/uav_api_logs/script_logs ...
 ```
 
-Available log components: `VEHICLE`, `API`, `GRADYS_GS`. The `VEHICLE` token routes to the active vehicle's logger; the actual line prefix you see is `[COPTER-<sysid>]` or `[PLANE-<sysid>]` depending on `--vehicle` — see [Logging in plane mode](#logging-in-plane-mode).
+Available log components: `VEHICLE`, `API`, `GRADYS_GS`. The `VEHICLE` token routes to the active vehicle's logger; the actual line prefix you see is `[COPTER-<sysid>]` or `[PLANE-<sysid>]` depending on `--vehicle` — see [Logging in different vehicles](#logging-in-different-vehicles).
 
 ## Mission Script Management
 
@@ -384,10 +384,10 @@ POST /mission/execute-script/
 Body: {"script_name": "my_script"}
 ```
 
-Scripts run in a persistent tmux session named `api-script`. If a script is already running, it is interrupted before the new one starts. Attach to the session for live output:
+Each execution gets its own tmux session named `api-script-<script>-<timestamp>` (the script's `.` is replaced with `_`). The session is owned by the script process — when the script exits, the session closes automatically. Re-running the same script while it is already running returns HTTP 400. Attach to a session for live output:
 
 ```bash
-tmux attach -t api-script
+tmux attach -t api-script-my_script_py-20260528_143012
 ```
 
 If `--script_logs` is set, stdout and stderr are saved as:
@@ -395,6 +395,27 @@ If `--script_logs` is set, stdout and stderr are saved as:
 <script_logs>/<name>_<timestamp>_out.log
 <script_logs>/<name>_<timestamp>_err.log
 ```
+
+**List currently running scripts:**
+```
+GET /mission/running-scripts
+```
+Returns each running script along with its tmux session name, start timestamp, and log paths. Stopped entries are retained internally but not shown here.
+
+**Stop a running script:**
+```
+POST /mission/stop-script/
+Body: {"script_name": "my_script"}
+```
+Sends `Ctrl+C` to the tmux session (so the script can run any `finally` / `atexit` cleanup — e.g. land the drone), waits briefly, then kills the session. Returns HTTP 404 if the script is unknown to the API, or 400 if it is no longer running.
+
+**Clear uploaded scripts:**
+```
+DELETE /mission/clear-scripts
+```
+Deletes all `.py` and `.sh` files from `--scripts_path`. Does not affect running scripts.
+
+> A background task in the API lifespan polls tmux every ~2s and marks scripts as `stopped` in an in-memory table as soon as their session ends, so `running-scripts` always reflects live state.
 
 ## Camera Peripheral
 
@@ -473,7 +494,7 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | `uav_api/routers/copter_command.py` | Copter endpoints: arm, takeoff, land, RTL, speed, home |
 | `uav_api/routers/copter_movement.py` | Copter endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
 | `uav_api/routers/copter_telemetry.py` | Copter endpoints: GPS, NED, compass, battery, sensor status, home info |
-| `uav_api/routers/copter_mission.py` | Copter endpoints: upload-script, list-scripts, execute-script |
+| `uav_api/routers/copter_mission.py` | Copter endpoints: upload-script, list-scripts, execute-script, running-scripts, stop-script, clear-scripts |
 | `uav_api/routers/copter_peripherical.py` | Copter endpoints: take_photo, servo_output |
 | `uav_api/routers/plane_command.py` | Plane endpoints (beta): arm, disarm, takeoff, land, RTL, set_home |
 | `uav_api/routers/plane_movement.py` | Plane endpoints (beta): go_to_gps, go_to_gps_wait, land_at, stop |
@@ -513,6 +534,7 @@ Module-level singletons in `uav_api/routers/router_dependencies.py` hold one `Co
 ```python
 Depends(get_copter_instance)  # shared Copter (copter routers; one MAVLink connection)
 Depends(get_plane_instance)   # shared Plane  (plane routers; one MAVLink connection)
+Depends(get_scripts_table)    # table with script execution information
 Depends(get_args)             # parsed CLI/config arguments
 ```
 

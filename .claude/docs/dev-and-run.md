@@ -79,13 +79,14 @@ The component name to log level plumbing lives in `uav_api/log.py`. The `VEHICLE
 
 **SITL xterm** — you can type MAVProxy commands directly into the spawned xterm (e.g., `mode GUIDED`, `status`, `param show SIM_SPEEDUP`). This is often faster than issuing HTTP calls when investigating MAVLink behavior.
 
-**tmux session for scripts** — scripts launched via `/mission/execute-script` run in a tmux session named `api-script`. Attach live:
+**tmux session for scripts** — each script launched via `/mission/execute-script` runs in its own tmux session named `api-script-<safe_name>-<timestamp>` (the script's `.` is replaced with `_`). The session is owned by the script process, so it closes automatically when the script exits. List active sessions or attach:
 
 ```bash
-tmux attach -t api-script
+tmux ls
+tmux attach -t api-script-my_script_py-20260528_143012
 ```
 
-Re-executing the endpoint sends `Ctrl+C` to the session before launching the new script, so the session persists across executions. Detailed behavior lives in `/home/fleury/gradys/major_projects/uav_api/.claude/docs/architectural_patterns.md` — describes the singleton/lifespan patterns, the drain loop, and the fire-and-forget vs blocking movement split.
+Re-executing the same script while it is running returns HTTP 400. Use `POST /mission/stop-script/` to terminate gracefully (Ctrl+C → kill-session) or `GET /mission/running-scripts` to enumerate live ones. Detailed behavior lives in `/home/fleury/gradys/major_projects/uav_api/.claude/docs/architectural_patterns.md` — describes the singleton/lifespan patterns, the drain loop, the scripts watcher, and the fire-and-forget vs blocking movement split.
 
 **MAVProxy parameter inspection** — inside SITL's xterm, `param show <NAME>` and `param set <NAME> <VAL>` let you poke parameters the API does not expose.
 

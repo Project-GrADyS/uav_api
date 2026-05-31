@@ -13,7 +13,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs — QuadCopters (stable)
 |------|---------|
 | `uav_api/vehicles/copter.py` | Copter MAVLink wrapper — full GUIDED surface (~1850 lines) |
 | `uav_api/vehicles/plane.py` | Plane MAVLink wrapper (beta) — GUIDED + TAKEOFF-mode takeoff, QuadPlane helpers |
-| `uav_api/api_app.py` | FastAPI app + lifespan (startup/shutdown of SITL, drain loop, GS task); conditional router registration by `--vehicle` |
+| `uav_api/api_app.py` | FastAPI app + lifespan (startup/shutdown of SITL, drain loop, scripts watcher, GS task); conditional router registration by `--vehicle` |
 | `uav_api/routers/` | One file per endpoint group, prefixed by vehicle: `copter_{command,movement,telemetry,mission,peripherical}.py` and `plane_{command,movement,telemetry}.py` |
 | `uav_api/classes/` | Pydantic input models: `Gps_pos`, `Local_pos`, `Local_velocity`, `Servo_output`, `Attitude_target` |
 | `uav_api/routers/router_dependencies.py` | Lazy singletons `get_copter_instance` / `get_plane_instance` + args via `Depends()` |
@@ -71,7 +71,7 @@ pytest tests/ -v
 | `tests/command_test.py` | Command router endpoints (arm, takeoff, land, RTL, speeds, set_home) |
 | `tests/movement_test.py` | Movement router endpoints (go_to_ned, drive, go_to_gps, travel_at_ned, stop) |
 | `tests/telemetry_test.py` | All telemetry endpoints (general, gps, ned, compass, battery, etc.) |
-| `tests/mission_test.py` | Mission script management (upload, list, execute, clear) |
+| `tests/mission_test.py` | Mission script management (upload, list, execute, clear). The `running-scripts` and `stop-script` endpoints are not covered yet. |
 | `tests/peripherical_test.py` | Peripherical endpoints (take_photo validation, servo_output) |
 
 > All tests are **integration tests** that run against a live SITL instance. A session-scoped fixture in `conftest.py` spawns the API with `--simulated true`, arms and takes off before yielding to tests. Requires ArduPilot installed and `xterm` on PATH.
@@ -125,7 +125,7 @@ All arguments defined in `uav_api/args.py`. Can also be provided via INI config 
 
 ## Key Entry Points
 - CLI entry: `uav_api/run_api.py` — starts uvicorn (default) or hypercorn (`--udp`)
-- App definition: `uav_api/api_app.py:60` (lifespan) and `:142` (conditional `--vehicle` router registration)
+- App definition: `uav_api/api_app.py:81` (lifespan) and `:175` (conditional `--vehicle` router registration)
 - Copter class: `uav_api/vehicles/copter.py:110`
 - Plane class: `uav_api/vehicles/plane.py:93`
 - Dependency injection: `uav_api/routers/router_dependencies.py` (`get_copter_instance`, `get_plane_instance`)

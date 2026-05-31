@@ -2,7 +2,7 @@
 
 ## Background Processes and Coroutines
 
-The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespan in `uav_api/api_app.py:60`. It starts and stops the following processes/tasks:
+The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespan in `uav_api/api_app.py:81`. It starts and stops the following processes/tasks:
 
 ### Always started
 
@@ -10,22 +10,30 @@ The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespa
 - Launched by `uav_api/run_api.py`
 - The lifespan context manages everything below within uvicorn's lifetime
 
-**MAVLink drain loop** (`api_app.py:95`)
+**MAVLink drain loop** (`api_app.py:115`)
 - `asyncio.create_task(vehicle.run_drain_mav_loop())` where `vehicle` is the active singleton (Copter or Plane, picked by `--vehicle`)
 - Continuously drains buffered MAVLink messages to prevent connection stalls
 - Runs for the entire API lifetime; cancelled on shutdown (`drain_mav_loop.cancel()`)
 
+### Conditional: copter only (`--vehicle` != `plane`)
+
+**Scripts watcher loop** (`api_app.py:47, 121`)
+- `asyncio.create_task(scripts_watcher_loop(get_scripts_table()))`
+- Polls every 2s: for each `scripts_table` entry with `status="running"`, checks `tmux has-session`. If the session has ended (script exited naturally), marks the entry `status="stopped"`, records `stopped_at`, and runs a defensive `tmux kill-session`.
+- Only started when the mission router is registered (copter mode); plane mode has no script management.
+- Cancelled on shutdown
+
 ### Conditional: simulated mode only (`--simulated true`)
 
-**ArduPilot SITL process** (`api_app.py:81-85`)
-- Spawns `xterm -e sim_vehicle.py -v {ArduCopter|ArduPlane} ...` as a subprocess; the vehicle binary is chosen by `args.vehicle` (line 81: `ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`)
+**ArduPilot SITL process** (`api_app.py:102-106`)
+- Spawns `xterm -e sim_vehicle.py -v {ArduCopter|ArduPlane} ...` as a subprocess; the vehicle binary is chosen by `args.vehicle` (`ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`)
 - Tagged with a unique `UAV_SITL_TAG=SITL_ID_<sysid>` environment variable
-- On shutdown, all system processes with that env tag are killed via `psutil` (`api_app.py:46-58`)
+- On shutdown, all system processes with that env tag are killed via `psutil` (`api_app.py:66-78`)
 - Allows clean teardown even if xterm spawned child processes
 
 ### Conditional: Gradys GS integration only (`--gradys_gs` is set)
 
-**GS location push coroutine** (`api_app.py:101`)
+**GS location push coroutine** (`api_app.py:128`)
 - `asyncio.create_task(send_location_to_gradys_gs(vehicle, session, ...))`
 - Defined in `uav_api/gradys_gs.py:35` — POSTs GPS position to `http://<gradys_gs>/update-info/` every second. Duck-types on `.get_gps_info()` and `.target_system`, which both `Copter` and `Plane` expose.
 - Uses a shared `aiohttp.ClientSession`; session is closed on shutdown after task cancellation
@@ -48,7 +56,7 @@ Only one vehicle singleton is instantiated per process (in the lifespan, conditi
 
 ## Vehicle Selection (`--vehicle`)
 
-**Pattern**: `uav_api/api_app.py:142-150`
+**Pattern**: `uav_api/api_app.py:175-185`
 
 `--vehicle {copter|plane}` (default `copter`, defined in `args.py:parse_mode`) controls which router set is registered:
 
@@ -58,18 +66,18 @@ if args.vehicle == "plane":
     app.include_router(plane_movement_router)
     app.include_router(plane_telemetry_router)
 else:
-    app.include_router(command_router)      # alias for copter_command_router
-    app.include_router(telemetry_router)
-    app.include_router(movement_router)
-    app.include_router(mission_router)
-    app.include_router(peripherical_router)
+    app.include_router(copter_command_router)
+    app.include_router(copter_telemetry_router)
+    app.include_router(copter_movement_router)
+    app.include_router(copter_mission_router)
+    app.include_router(copter_peripherical_router)
 ```
 
 The router sets share URL prefixes (`/command`, `/movement`, `/telemetry`) so HTTP consumers don't see a vehicle-type difference at the path level. Plane mode has no `mission` or `peripherical` routers and a smaller movement surface — see `plane-support.md`.
 
 ## Endpoint Pairs (Fire-and-Forget vs Blocking)
 
-**Pattern**: `uav_api/routers/movement.py`
+**Pattern**: `uav_api/routers/copter_movement.py`
 
 Movement commands come in pairs. The blocking (`_wait`) variant issues the command then polls for arrival:
 
@@ -110,11 +118,32 @@ All routers return a consistent JSON structure:
 
 Telemetry endpoints add an `"info": {...}` field. All errors raise `HTTPException(status_code=500)` with a descriptive `detail` string.
 
-## Script Execution via tmux
+## Script Execution and Tracking via tmux
 
-**Pattern**: `uav_api/routers/mission.py:72-94`
+**Pattern**: `uav_api/routers/copter_mission.py` + `scripts_watcher_loop` in `api_app.py:47`
 
-`POST /mission/execute-script/` runs uploaded scripts in a persistent tmux session named `"api-script"`:
-- If the session already exists, sends `Ctrl+C` to stop any running script before re-executing
-- stdout/stderr are redirected to timestamped log files in `script_logs/`
-- Allows attaching to the session with `tmux attach -t api-script` for live debugging
+`POST /mission/execute-script/` runs each uploaded script in its own tmux session, owned by the script process so the session ends when the script exits:
+
+- Session name: `api-script-<safe_name>-<timestamp>` (`.` in the filename is replaced with `_`)
+- Launched with `tmux new-session -d -s <name> bash -c "<python> <script> 1> out 2> err"` — tmux owns the command lifecycle
+- stdout/stderr redirected to timestamped log files under `--script_logs`
+- Attach live: `tmux attach -t <session>`
+
+**Tracking in `scripts_table`** (singleton dict in `router_dependencies.py:31`, keyed by sanitized script filename):
+
+```python
+{
+    "status": "running" | "stopped",
+    "session": "api-script-<safe_name>-<timestamp>",
+    "started_at": "YYYYmmdd_HHMMSS",
+    "stopped_at": "YYYYmmdd_HHMMSS" | None,
+    "out_log": "<path>",
+    "err_log": "<path>",
+}
+```
+
+- `execute-script` sets `status="running"` and refuses (`400`) if the same script is already running.
+- `scripts_watcher_loop` polls `tmux has-session` every 2s and transitions entries to `"stopped"` when the session disappears (the watcher itself runs the defensive `tmux kill-session` to clean up any stuck session).
+- `POST /mission/stop-script/` sends `Ctrl+C` → 1s sleep → `tmux kill-session` so the script can run `finally`/`atexit` cleanup (e.g. landing the drone) before forced termination.
+- `GET /mission/running-scripts` returns only the entries currently in `status="running"`.
+- Stopped entries are retained until the API process restarts.
