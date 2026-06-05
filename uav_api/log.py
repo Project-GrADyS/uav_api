@@ -98,6 +98,10 @@ def set_log_config(args):
                 'level': 'INFO',
                 'handlers': []
             },
+            "SCRIPT": {
+                'level': 'INFO',
+                'handlers': []
+            },
             "SYSTEM": {
                 'level': 'INFO',
                 'handlers': ['console_handler']
@@ -125,6 +129,8 @@ def set_log_config(args):
         logging_config['loggers']["uvicorn.error"]['handlers'].append('console_handler')
     if "GRADYS_GS" in args.log_console:
         logging_config['loggers']["GRADYS_GS"]['handlers'].append('console_handler')
+    if "SCRIPT" in args.log_console:
+        logging_config['loggers']["SCRIPT"]['handlers'].append('console_handler')
 
     if "VEHICLE" in args.debug:
         if "plane" == args.vehicle:
@@ -137,5 +143,7 @@ def set_log_config(args):
         logging_config['loggers']["uvicorn.error"]['level'] = "DEBUG"
     if "GRADYS_GS" in args.debug:
         logging_config['loggers']["GRADYS_GS"]['level'] = "DEBUG"
+    if "SCRIPT" in args.debug:
+        logging_config['loggers']["SCRIPT"]['level'] = "DEBUG"
 
     logging.config.dictConfig(logging_config)

@@ -178,7 +178,7 @@ def parse_logs(logs_parser):
 
     # Defines which values are accepted as a LOGGER input.
     def valid_loggers_type(value):
-        valid_loggers = {'UVICORN', 'VEHICLE', 'GRADYS_GS'}
+        valid_loggers = {'UVICORN', 'VEHICLE', 'GRADYS_GS', 'SCRIPT'}
         if not value in valid_loggers:
             raise argparse.ArgumentTypeError('Invalid value. Please choose one of the following: value1, value2, or both')
         return value

@@ -18,6 +18,7 @@ args = get_args()
 
 async def scripts_watcher_loop(scripts_table, interval=2.0):
     """Polls tmux for entries marked running; transitions them to stopped when the session ends."""
+    logger = logging.getLogger("SCRIPT")
     while True:
         try:
             for name, info in list(scripts_table.items()):

@@ -1,3 +1,4 @@
+import logging
 import shutil
 import time
 import subprocess
@@ -86,8 +87,11 @@ def execute_script(script: Script, args = Depends(get_args), scripts_table = Dep
         "out_log": out_file,
         "err_log": err_file,
     }
-    print(f"Running: {safe_name}")
-    print(f"To view, use: tmux attach -t {session_name}")
+
+    logger = logging.getLogger("SCRIPT")
+
+    logger.info(f"Running: {safe_name}")
+    logger.info(f"To view, use: tmux attach -t {session_name}")
 
     return {
         "device": "uav",
