@@ -13,7 +13,6 @@ def run_with_args(raw_args=None):
     # is set, both below and in the app lifespan.
     set_log_config(args)
     args = setup(args)
-    set_log_config(args)
     write_args_to_env(args)
 
     if args.udp:
