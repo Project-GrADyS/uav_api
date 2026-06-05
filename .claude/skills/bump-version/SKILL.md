@@ -40,6 +40,14 @@ Use `AskUserQuestion` to ask the user for the new version string. Show the curre
 - Edit `uav_api/api_app.py`: `version="OLD"` → `version="NEW"`
 - Always use the exact old string read in Step 1 to match
 
+## Step 4b: Update the changelog
+
+Invoke the `update-changelog` skill using the `Skill` tool so the new version's
+entry is generated and written before committing. The version files are already
+updated, so the skill reads the new version from `pyproject.toml` and scans
+commits since the last release tag. Its `CHANGELOG.md` edit is picked up by the
+commit in Step 5.
+
 ## Step 5: Commit
 
 Invoke the `/commit-changes` skill using the `Skill` tool. This handles staging, message drafting, user confirmation, and committing.
