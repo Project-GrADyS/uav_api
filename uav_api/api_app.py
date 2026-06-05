@@ -1,14 +1,5 @@
-import os
-import asyncio
-import aiohttp
-import signal
-import psutil
-import subprocess
-
-from datetime import datetime
 from fastapi import FastAPI
-from contextlib import asynccontextmanager
-from uav_api.routers.router_dependencies import get_copter_instance, get_plane_instance, get_scripts_table
+
 from uav_api.routers.copter_movement import copter_movement_router
 from uav_api.routers.copter_command import copter_command_router
 from uav_api.routers.copter_telemetry import copter_telemetry_router
@@ -17,11 +8,10 @@ from uav_api.routers.copter_mission import copter_mission_router
 from uav_api.routers.plane_command import plane_command_router
 from uav_api.routers.plane_movement import plane_movement_router
 from uav_api.routers.plane_telemetry import plane_telemetry_router
-from uav_api.log import set_log_config
-from uav_api.args import read_args_from_env
-from uav_api.gradys_gs import send_location_to_gradys_gs
+from uav_api.routers.router_dependencies import get_args
+from uav_api.lifespan import lifespan
 
-args = read_args_from_env()
+args = get_args()
 
 metadata = [
 {
@@ -44,127 +34,6 @@ description = f"""
 * CONNECTION_STRING = **{args.uav_connection}**
 """
 
-async def scripts_watcher_loop(scripts_table, interval=2.0):
-    """Polls tmux for entries marked running; transitions them to stopped when the session ends."""
-    while True:
-        try:
-            for name, info in list(scripts_table.items()):
-                if info.get("status") != "running":
-                    continue
-                session = info["session"]
-                has = subprocess.run(["tmux", "has-session", "-t", session], capture_output=True)
-                if has.returncode != 0:
-                    info["status"] = "stopped"
-                    info["stopped_at"] = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    # Defensive: kill in case the session is in a stuck state.
-                    subprocess.run(["tmux", "kill-session", "-t", session], capture_output=True)
-                    print(f"Script '{name}' detected as stopped.")
-        except Exception as e:
-            print(f"scripts_watcher_loop iteration error: {e}")
-        await asyncio.sleep(interval)
-
-def kill_sitl_by_tag(tag_value):
-    """
-    Scans ALL system processes and kills those with the matching environment tag.
-    """
-    for proc in psutil.process_iter(['environ', 'name', 'pid']):
-        try:
-            # Check if our custom variable is in the process environment
-            env = proc.info.get('environ')
-            if env and env.get("UAV_SITL_TAG") == tag_value:
-                print(f"Found rogue process: {proc.info['name']} (PID: {proc.info['pid']}). Killing...")
-                proc.kill() # Use kill() for xterms as they can be stubborn
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            continue
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Configure loggers
-    set_log_config(args)
-    # Start SITL
-    if args.simulated:
-        print("Starting SITL...")
-    # Create a unique tag for this specific SITL instance
-        sitl_tag = f"SITL_ID_{args.sysid}"
-    
-        # Add the tag to the environment variables
-        env = os.environ.copy()
-        env["UAV_SITL_TAG"] = sitl_tag 
-
-        # Expand the path as discussed before
-        ardupilot_base = os.path.expanduser(args.ardupilot_path)
-        script_path = os.path.join(ardupilot_base, "Tools/autotest/sim_vehicle.py")
-        
-        out_str = f"--out {args.uav_connection} {' '.join([f'--out {address}' for address in args.gs_connection])} "
-        home_dir = os.path.expanduser("~")
-        ardupilot_logs = os.path.join(home_dir, "uav_api_logs", "ardupilot_logs")
-        ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"
-        sitl_command = f"xterm -e {script_path} -v {ardupilot_vehicle} -I {args.sysid} --sysid {args.sysid} -N -L {args.location} --speedup {args.speedup} {out_str} --use-dir={ardupilot_logs}"
-        
-        # Start the process with the custom environment
-        sitl_process = subprocess.Popen(sitl_command.split(" "), env=env)
-        print(f"SITL started with PID {sitl_process.pid}.")
-    conn = args.uav_connection if args.connection_type == "usb" else f"{args.connection_type}:{args.uav_connection}"
-    if args.vehicle == "plane":
-        vehicle = get_plane_instance(args.sysid, conn)
-    else:
-        vehicle = get_copter_instance(args.sysid, conn)
-
-    # Starting task that will continuously drain MAVLink messages
-    print("Starting Drain MAVLink loop...")
-    drain_mav_loop = asyncio.create_task(vehicle.run_drain_mav_loop())
-
-    # Scripts watcher (copter only — mission router is not registered for plane)
-    scripts_watcher_task = None
-    if args.vehicle != "plane":
-        print("Starting scripts watcher loop...")
-        scripts_watcher_task = asyncio.create_task(scripts_watcher_loop(get_scripts_table()))
-
-    # If defined, start location thread for Gradys Ground Station
-    if args.gradys_gs is not None:
-        print("Starting Gradys GS location task...")
-        session = aiohttp.ClientSession()
-        location_task = asyncio.create_task(send_location_to_gradys_gs(vehicle, session, args.port, args.gradys_gs))
-    
-    print("API is ready.")
-    yield
-    print("Shutting down API...")
-
-    # Close SITL
-    if args.simulated:
-        print("Closing SITL and all associated windows...")
-        kill_sitl_by_tag(sitl_tag)
-        print("SITL and associated windows closed.")
-
-    # Cancelling Drain Mav Loop Task
-    print("Cancelling Drain MAVLink loop...")
-    drain_mav_loop.cancel()
-
-    try:
-        await drain_mav_loop
-    except asyncio.CancelledError:
-        print("Drain MAVLink loop has been cancelled.")
-
-    if scripts_watcher_task is not None:
-        print("Cancelling scripts watcher loop...")
-        scripts_watcher_task.cancel()
-        try:
-            await scripts_watcher_task
-        except asyncio.CancelledError:
-            print("Scripts watcher loop has been cancelled.")
-
-    # Cancelling location coroutine if it was started
-    if args.gradys_gs is not None:
-        print("Cancelling Gradys GS location task...")
-        location_task.cancel()
-
-        try:
-            await location_task
-        except asyncio.CancelledError:
-            print("Location task has been cancelled.")
-
-        await session.close()
-        print("Gradys GS location task closed.")
 app = FastAPI(
     title="Uav_API",
     summary=f"API designed to simplify vehicle control for Ardupilot UAVs.",

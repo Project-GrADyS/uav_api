@@ -45,11 +45,11 @@ def build_hypercorn_log_config(args):
         for logger in logging_config['loggers'].values():
             logger['handlers'].append('file_handler')
 
-    if "API" in args.log_console:
+    if "UVICORN" in args.log_console:
         logging_config['loggers']['hypercorn.access']['handlers'].append('console_handler')
         logging_config['loggers']['hypercorn.error']['handlers'].append('console_handler')
 
-    if "API" in args.debug:
+    if "UVICORN" in args.debug:
         logging_config['loggers']['hypercorn.access']['level'] = "DEBUG"
         logging_config['loggers']['hypercorn.error']['level'] = "DEBUG"
 
@@ -97,7 +97,11 @@ def set_log_config(args):
             "GRADYS_GS": {
                 'level': 'INFO',
                 'handlers': []
-            }
+            },
+            "SYSTEM": {
+                'level': 'INFO',
+                'handlers': ['console_handler']
+            },
         }
     }
 
@@ -115,7 +119,7 @@ def set_log_config(args):
             logging_config['loggers']["PLANE"]['handlers'].append('console_handler')
         else:
             logging_config['loggers']["COPTER"]['handlers'].append('console_handler')
-    if "API" in args.log_console:
+    if "UVICORN" in args.log_console:
         logging_config['loggers']["uvicorn"]['handlers'].append('console_handler')
         logging_config['loggers']["uvicorn.access"]['handlers'].append('console_handler')
         logging_config['loggers']["uvicorn.error"]['handlers'].append('console_handler')
@@ -127,7 +131,7 @@ def set_log_config(args):
             logging_config['loggers']["PLANE"]['level'] = "DEBUG"
         else:
             logging_config['loggers']["COPTER"]['level'] = "DEBUG"
-    if "API" in args.debug:
+    if "UVICORN" in args.debug:
         logging_config['loggers']["uvicorn"]['level'] = "DEBUG"
         logging_config['loggers']["uvicorn.access"]['level'] = "DEBUG"
         logging_config['loggers']["uvicorn.error"]['level'] = "DEBUG"

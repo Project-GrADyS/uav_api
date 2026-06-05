@@ -1,5 +1,8 @@
 import os
+import logging
 import datetime
+
+logger = logging.getLogger("SYSTEM")
 
 def ensure_home_subdir_exists(subdir_name):
     home_dir = os.path.expanduser("~")  # Gets the home directory path
@@ -7,9 +10,9 @@ def ensure_home_subdir_exists(subdir_name):
 
     if not os.path.exists(target_path):
         os.makedirs(target_path)
-        print(f"Created directory: {target_path}")
+        logger.info(f"Created directory: {target_path}")
     else:
-        print(f"Directory already exists: {target_path}")
+        logger.info(f"Directory already exists: {target_path}")
 
 def ensure_home_file_exists(filename, content=""):
     home_dir = os.path.expanduser("~")  # Gets the user's home directory
@@ -18,9 +21,9 @@ def ensure_home_file_exists(filename, content=""):
     if not os.path.isfile(file_path):
         with open(file_path, 'w') as f:
             f.write(content)
-        print(f"Created file: {file_path}")
+        logger.info(f"Created file: {file_path}")
     else:
-        print(f"File already exists: {file_path}")
+        logger.info(f"File already exists: {file_path}")
 
 def ensure_dev_certs(args):
     if not args.udp or args.certfile is not None:
@@ -33,7 +36,7 @@ def ensure_dev_certs(args):
 
     if not os.path.exists(certs_dir):
         os.makedirs(certs_dir)
-        print(f"Created directory: {certs_dir}")
+        logger.info(f"Created directory: {certs_dir}")
 
     if not os.path.isfile(cert_path) or not os.path.isfile(key_path):
         from cryptography import x509
@@ -77,9 +80,9 @@ def ensure_dev_certs(args):
         with open(cert_path, "wb") as f:
             f.write(cert.public_bytes(serialization.Encoding.PEM))
 
-        print(f"Generated self-signed dev certs in: {certs_dir}")
+        logger.info(f"Generated self-signed dev certs in: {certs_dir}")
     else:
-        print(f"Using existing dev certs from: {certs_dir}")
+        logger.info(f"Using existing dev certs from: {certs_dir}")
 
     args.certfile = cert_path
     args.keyfile = key_path

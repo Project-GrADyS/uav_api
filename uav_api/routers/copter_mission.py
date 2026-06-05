@@ -72,7 +72,7 @@ def execute_script(script: Script, args = Depends(get_args), scripts_table = Dep
     if not script_path.exists() or not script_path.is_file():
         raise HTTPException(status_code=404, detail=f"Script '{safe_name}' not found.")
 
-    session_name = f"api-script-{safe_name.replace('.', '_')}-{timestamp}"
+    session_name = f"UAV_API_{args.sysid}-{safe_name.replace('.', '_')}-{timestamp}"
     # tmux owns the command lifecycle: when the python process exits, the
     # session auto-terminates, which is what scripts_watcher_loop polls for.
     command = f"{args.python_path} {script_path} 1> {out_file} 2> {err_file}"

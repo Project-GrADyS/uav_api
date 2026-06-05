@@ -3,12 +3,17 @@ import uvicorn
 
 from uav_api.args import parse_args, write_args_to_env
 from uav_api.setup import setup
-from uav_api.log import build_hypercorn_log_config
+from uav_api.log import build_hypercorn_log_config, set_log_config
 
 def run_with_args(raw_args=None):
     """Parse args, configure, and start the ASGI server (blocking)."""
     args = parse_args(raw_args)
+    # Configure loggers before setup() so its SYSTEM logs surface (console only;
+    # log_path isn't known yet). Re-applied with the file handler once log_path
+    # is set, both below and in the app lifespan.
+    set_log_config(args)
     args = setup(args)
+    set_log_config(args)
     write_args_to_env(args)
 
     if args.udp:
