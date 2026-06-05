@@ -426,12 +426,12 @@ Executes an uploaded script in a uniquely-named tmux session and tracks it in an
 ```
 
 **Behavior:**
-- Each execution gets its own tmux session: `api-script-<safe_name>-<timestamp>` (the script's `.` is replaced with `_` so the name is safe for tmux)
+- Each execution gets its own tmux session: `UAV_API_<sysid>-<safe_name>-<timestamp>` (the script's `.` is replaced with `_` so the name is safe for tmux)
 - Session is owned by the script process (created with `tmux new-session -d -s <name> bash -c <command>`), so it auto-terminates when the script exits
 - The script is recorded in the in-memory scripts table with `status="running"`; a background watcher transitions it to `"stopped"` once the tmux session ends
 - stdout → `<script_logs>/<name>_<timestamp>_out.log`
 - stderr → `<script_logs>/<name>_<timestamp>_err.log`
-- Attach live: `tmux attach -t api-script-<safe_name>-<timestamp>`
+- Attach live: `tmux attach -t UAV_API_<sysid>-<safe_name>-<timestamp>`
 
 **Errors:** 400 if the script is already running; 404 if the script file is not in `scripts_path`.
 
@@ -447,7 +447,7 @@ Returns the scripts currently in `status="running"` according to the in-memory s
   "scripts": [
     {
       "script": "my_script.py",
-      "session": "api-script-my_script_py-20260528_143012",
+      "session": "UAV_API_1-my_script_py-20260528_143012",
       "started_at": "20260528_143012",
       "out_log": "/.../my_script_20260528_143012_out.log",
       "err_log": "/.../my_script_20260528_143012_err.log"

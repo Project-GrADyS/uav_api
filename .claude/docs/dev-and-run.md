@@ -68,8 +68,8 @@ By default, logs are per-component and written to file + console depending on fl
 
 | Flag | Effect |
 |------|--------|
-| `--log_console VEHICLE API GRADYS_GS` | Print these components' logs to stdout |
-| `--debug VEHICLE API` | Same component names, but at DEBUG level |
+| `--log_console VEHICLE UVICORN GRADYS_GS SCRIPT` | Print these components' logs to stdout |
+| `--debug VEHICLE UVICORN` | Same component names, but at DEBUG level |
 | `--log_path /tmp/uav_api.log` | Write all component logs combined to this file |
 | `--script_logs ~/uav_logs/` | Redirect `/mission/execute-script` stdout/stderr to timestamped files here |
 
@@ -79,11 +79,11 @@ The component name to log level plumbing lives in `uav_api/log.py`. The `VEHICLE
 
 **SITL xterm** — you can type MAVProxy commands directly into the spawned xterm (e.g., `mode GUIDED`, `status`, `param show SIM_SPEEDUP`). This is often faster than issuing HTTP calls when investigating MAVLink behavior.
 
-**tmux session for scripts** — each script launched via `/mission/execute-script` runs in its own tmux session named `api-script-<safe_name>-<timestamp>` (the script's `.` is replaced with `_`). The session is owned by the script process, so it closes automatically when the script exits. List active sessions or attach:
+**tmux session for scripts** — each script launched via `/mission/execute-script` runs in its own tmux session named `UAV_API_<sysid>-<safe_name>-<timestamp>` (the script's `.` is replaced with `_`). The session is owned by the script process, so it closes automatically when the script exits. List active sessions or attach:
 
 ```bash
 tmux ls
-tmux attach -t api-script-my_script_py-20260528_143012
+tmux attach -t UAV_API_1-my_script_py-20260528_143012
 ```
 
 Re-executing the same script while it is running returns HTTP 400. Use `POST /mission/stop-script/` to terminate gracefully (Ctrl+C → kill-session) or `GET /mission/running-scripts` to enumerate live ones. Detailed behavior lives in `/home/fleury/gradys/major_projects/uav_api/.claude/docs/architectural_patterns.md` — describes the singleton/lifespan patterns, the drain loop, the scripts watcher, and the fire-and-forget vs blocking movement split.

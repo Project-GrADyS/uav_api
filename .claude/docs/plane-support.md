@@ -48,10 +48,10 @@ For copter (default) endpoint contracts see `specification.md`. The shared lifes
 
 `args.py:parse_mode` defines `--vehicle` with `choices=['copter', 'plane']`, default `copter`. The value is serialised into `UAV_ARGS` env var and read back by `api_app.py` at import time.
 
-Inside `api_app.py:lifespan` (around line 61):
+Inside `lifespan.py:lifespan`:
 
-1. **SITL spawn** (`api_app.py:81-82`) — `ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`, then `xterm -e sim_vehicle.py -v {ardupilot_vehicle} -I {sysid} …`.
-2. **Singleton selection** (`api_app.py:88-91`):
+1. **SITL spawn** (`start_sitl` in `lifespan.py:85`) — `ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`, then `xterm -e sim_vehicle.py -v {ardupilot_vehicle} -I {sysid} …`.
+2. **Singleton selection** (`lifespan.py:147-150`):
    ```python
    if args.vehicle == "plane":
        vehicle = get_plane_instance(args.sysid, conn)
@@ -60,7 +60,7 @@ Inside `api_app.py:lifespan` (around line 61):
    ```
 3. **Drain loop + Gradys GS task** receive `vehicle` and duck-type on `.get_gps_info()` / `.target_system`, which both classes expose.
 
-At the bottom of `api_app.py` (around line 142):
+In `api_app.py` (around line 44):
 
 ```python
 if args.vehicle == "plane":

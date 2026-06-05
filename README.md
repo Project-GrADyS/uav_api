@@ -273,7 +273,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--log_console` | `[]` | Components to print logs to console: `VEHICLE` `API` `GRADYS_GS`. `VEHICLE` is vehicle-agnostic — see [Logging in different vehicles](#logging-in-different-vehicles) for the prefix actually printed. |
+| `--log_console` | `[]` | Components to print logs to console: `VEHICLE` `UVICORN` `GRADYS_GS` `SCRIPT`. `VEHICLE` is vehicle-agnostic — see [Logging in different vehicles](#logging-in-different-vehicles) for the prefix actually printed. |
 | `--log_path` | None | File path to write all component logs combined |
 | `--debug` | `[]` | Same component names as `--log_console` but at DEBUG verbosity |
 | `--script_logs` | None | Directory where script stdout/stderr are saved as timestamped `.log` files |
@@ -348,8 +348,8 @@ Connect Mission Planner to the specified UDP address to see live position, attit
 Control what gets logged and where with the logging arguments:
 
 ```bash
-# Print VEHICLE and API logs to console
-uav-api --log_console VEHICLE API ...
+# Print VEHICLE and UVICORN logs to console
+uav-api --log_console VEHICLE UVICORN ...
 
 # Write all logs to a file
 uav-api --log_path ~/uav_api.log ...
@@ -361,7 +361,7 @@ uav-api --debug VEHICLE ...
 uav-api --script_logs ~/uav_api_logs/script_logs ...
 ```
 
-Available log components: `VEHICLE`, `API`, `GRADYS_GS`. The `VEHICLE` token routes to the active vehicle's logger; the actual line prefix you see is `[COPTER-<sysid>]` or `[PLANE-<sysid>]` depending on `--vehicle` — see [Logging in different vehicles](#logging-in-different-vehicles).
+Available log components: `VEHICLE`, `UVICORN`, `GRADYS_GS`, `SCRIPT`. The `VEHICLE` token routes to the active vehicle's logger; the actual line prefix you see is `[COPTER-<sysid>]` or `[PLANE-<sysid>]` depending on `--vehicle` — see [Logging in different vehicles](#logging-in-different-vehicles).
 
 ## Mission Script Management
 
@@ -384,10 +384,10 @@ POST /mission/execute-script/
 Body: {"script_name": "my_script"}
 ```
 
-Each execution gets its own tmux session named `api-script-<script>-<timestamp>` (the script's `.` is replaced with `_`). The session is owned by the script process — when the script exits, the session closes automatically. Re-running the same script while it is already running returns HTTP 400. Attach to a session for live output:
+Each execution gets its own tmux session named `UAV_API_<sysid>-<script>-<timestamp>` (the script's `.` is replaced with `_`). The session is owned by the script process — when the script exits, the session closes automatically. Re-running the same script while it is already running returns HTTP 400. Attach to a session for live output:
 
 ```bash
-tmux attach -t api-script-my_script_py-20260528_143012
+tmux attach -t UAV_API_1-my_script_py-20260528_143012
 ```
 
 If `--script_logs` is set, stdout and stderr are saved as:
@@ -483,7 +483,8 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | Path | Purpose |
 |------|---------|
 | `uav_api/run_api.py` | CLI entry point — parses args, runs setup, launches uvicorn |
-| `uav_api/api_app.py` | FastAPI app definition and lifespan (startup/shutdown logic); conditional router registration by `--vehicle` |
+| `uav_api/api_app.py` | FastAPI app definition; conditional router registration by `--vehicle`; imports lifespan from `lifespan.py` |
+| `uav_api/lifespan.py` | Async lifespan context manager — startup/shutdown of SITL, drain loop, scripts watcher, and GS task, with partial-startup cleanup |
 | `uav_api/vehicles/copter.py` | Copter MAVLink wrapper — full GUIDED surface (~1850 lines) |
 | `uav_api/vehicles/plane.py` | Plane MAVLink wrapper (beta) — GUIDED + TAKEOFF-mode takeoff, QuadPlane helpers |
 | `uav_api/args.py` | CLI argument parsing; config serialized to `UAV_ARGS` env var |

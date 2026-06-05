@@ -13,7 +13,8 @@ HTTP REST API for controlling ArduPilot-compatible UAVs — QuadCopters (stable)
 |------|---------|
 | `uav_api/vehicles/copter.py` | Copter MAVLink wrapper — full GUIDED surface (~1850 lines) |
 | `uav_api/vehicles/plane.py` | Plane MAVLink wrapper (beta) — GUIDED + TAKEOFF-mode takeoff, QuadPlane helpers |
-| `uav_api/api_app.py` | FastAPI app + lifespan (startup/shutdown of SITL, drain loop, scripts watcher, GS task); conditional router registration by `--vehicle` |
+| `uav_api/api_app.py` | FastAPI app definition; conditional router registration by `--vehicle`; imports the lifespan from `lifespan.py` |
+| `uav_api/lifespan.py` | Async lifespan context manager — startup/shutdown of SITL (with liveness check), MAVLink drain loop, scripts watcher, GS task; partial-startup cleanup and tmux-session teardown |
 | `uav_api/routers/` | One file per endpoint group, prefixed by vehicle: `copter_{command,movement,telemetry,mission,peripherical}.py` and `plane_{command,movement,telemetry}.py` |
 | `uav_api/classes/` | Pydantic input models: `Gps_pos`, `Local_pos`, `Local_velocity`, `Servo_output`, `Attitude_target` |
 | `uav_api/routers/router_dependencies.py` | Lazy singletons `get_copter_instance` / `get_plane_instance` + args via `Depends()` |
@@ -94,7 +95,7 @@ All arguments defined in `uav_api/args.py`. Can also be provided via INI config 
 | `--gradys_gs` | None | `host:port` of Gradys GS — when set, API pushes GPS location every second |
 | `--scripts_path` | `~/uav_scripts` | Where `/mission/upload-script` saves files and `/mission/execute-script` looks for them (copter only) |
 | `--python_path` | `python3` | Python binary invoked when running uploaded `.py` scripts |
-| `--log_console` | `[]` | Space-separated list of components to print logs: `VEHICLE` `API` `GRADYS_GS`. `VEHICLE` routes to the active vehicle's logger; printed prefix is `[COPTER-<sysid>]` or `[PLANE-<sysid>]`. |
+| `--log_console` | `[]` | Space-separated list of components to print logs: `VEHICLE` `UVICORN` `GRADYS_GS` `SCRIPT`. `VEHICLE` routes to the active vehicle's logger; printed prefix is `[COPTER-<sysid>]` or `[PLANE-<sysid>]`. |
 | `--log_path` | None | File path to write all component logs combined |
 | `--debug` | `[]` | Same component names as `--log_console` but at DEBUG verbosity |
 | `--script_logs` | None | Directory where script stdout/stderr are saved as timestamped `.log` files |
@@ -125,7 +126,7 @@ All arguments defined in `uav_api/args.py`. Can also be provided via INI config 
 
 ## Key Entry Points
 - CLI entry: `uav_api/run_api.py` — starts uvicorn (default) or hypercorn (`--udp`)
-- App definition: `uav_api/api_app.py:81` (lifespan) and `:175` (conditional `--vehicle` router registration)
+- App definition: `uav_api/api_app.py:37` (FastAPI app) and `:44` (conditional `--vehicle` router registration); lifespan in `uav_api/lifespan.py:113`
 - Copter class: `uav_api/vehicles/copter.py:110`
 - Plane class: `uav_api/vehicles/plane.py:93`
 - Dependency injection: `uav_api/routers/router_dependencies.py` (`get_copter_instance`, `get_plane_instance`)
