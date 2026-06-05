@@ -1616,13 +1616,9 @@ Also, ignores heartbeats not from our target system"""
             mavutil.mavlink.POSITION_TARGET_TYPEMASK_X_IGNORE |
             mavutil.mavlink.POSITION_TARGET_TYPEMASK_Y_IGNORE |
             mavutil.mavlink.POSITION_TARGET_TYPEMASK_Z_IGNORE |
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
             mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
             mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
             mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
             mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE,
             0, 0, 0,
             0, 0, 0,
