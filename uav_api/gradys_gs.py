@@ -49,6 +49,7 @@ async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
                 _logger.info("Fetching location for Gradys GS...")
                 location = uav.get_gps_info()
                 general_info = uav.get_general_info()
+                battery_info = uav.get_battery_info()
             except Exception as e:
                 _logger.warning("Failed to fetch location")
                 continue
@@ -58,10 +59,11 @@ async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
                 "lat": str(location.lat / 1.0e7), 
                 "lng": str(location.lon / 1.0e7), 
                 "alt": str(location.relative_alt / 1000),
-                "ground_speed": str(general_info.ground_speed),
+                "ground_speed": str(general_info.groundspeed),
                 "air_speed": str(general_info.airspeed),
                 "heading": str(general_info.heading),
-                "battery": str(general_info.battery_remaining),
+                "battery_percent": str(battery_info.battery_remaining),
+                "battery_voltage": str(battery_info.battery_voltage),
                 "device": "uav",
                 "type": 102, # Internal UAV location update message type,
                 "seq": seq,
