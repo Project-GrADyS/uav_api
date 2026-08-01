@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import subprocess
+from pymavlink import mavutil
 
 def get_system_ip():
     interface = "wlan0"
@@ -63,7 +64,7 @@ async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
                 "air_speed": str(general_info.airspeed),
                 "heading": str(general_info.heading),
                 "battery_percent": str(battery_info["battery_remaining"]),
-                "battery_voltage": str(battery_info["voltage"]),
+                "ready_to_arm": uav.sensor_has_state(mavutil.mavlink.MAV_SYS_STATUS_PREARM_CHECK, True, True, True),
                 "device": "uav",
                 "type": 102, # Internal UAV location update message type,
                 "seq": seq,
