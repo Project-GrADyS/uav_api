@@ -34,7 +34,7 @@ uav_connection = 127.0.0.1:17171
 connection_type = udpin
 sysid = ${SYSID}
 gradys_gs = ${GRADYS_GS_IP}
-scripts_path = /home/pi/field_tests_feb_2026/drones_scripts/python_scripts
+scripts_path = /home/pi/uav_scripts
 EOF
 
 echo "Configuration generated successfully."
