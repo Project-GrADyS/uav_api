@@ -29,7 +29,7 @@ Same axes, but meters/s. Used only by `/movement/travel_at_ned`. Note the body m
 
 ## SITL quirks (`--simulated true`)
 
-**xterm wrapping.** SITL is spawned as `xterm -e sim_vehicle.py ...` (see `api_app.py:78`). The xterm window is the only place SITL stderr/stdout land, so if SITL fails to come up, the API will just time out on its connect retries while the xterm shows the real error. Always check the xterm window first.
+**xterm wrapping.** SITL is spawned as `xterm -e sim_vehicle.py ...` (see `start_sitl` in `lifespan.py:85`). The xterm window is the only place SITL stderr/stdout land, so if SITL fails to come up, the API will just time out on its connect retries while the xterm shows the real error. Always check the xterm window first.
 
 **UAV_SITL_TAG process tracking.** The subprocess gets `UAV_SITL_TAG=SITL_ID_<sysid>` in its environment. On shutdown, `psutil` walks the process table looking for that tag and calls `kill()` on every match (xterms are stubborn; `terminate()` often does not work). If you ever see zombie SITL processes, it is because they were spawned without the tag — not the normal path.
 
@@ -57,7 +57,7 @@ Source system/component is hardcoded to `(250, 250)` — a GCS-class ID that Ard
 
 After `connect()`, `set_streamrate(self.streamrate)` requests `MAV_DATA_STREAM_ALL` at the configured rate and blocks until a `SYSTEM_TIME` message arrives (proves the link is up). Typical failure mode: timeout after 20 s → `TimeoutException`. Raise `--streamrate` cautiously; high rates over poor radio links drop more messages than they gain.
 
-The async drain loop (`api_app.py:87`) continuously reads MAVLink messages so the pymavlink buffer does not fill and stall new requests. It runs for the entire lifespan; if you see telemetry going stale in a long session, check that the task is still alive. See `/home/fleury/gradys/major_projects/uav_api/.claude/docs/architectural_patterns.md` — documents the lifespan, drain loop, and task-cancellation path on shutdown.
+The async drain loop (`lifespan.py:153`) continuously reads MAVLink messages so the pymavlink buffer does not fill and stall new requests. It runs for the entire lifespan; if you see telemetry going stale in a long session, check that the task is still alive. See `/home/fleury/gradys/major_projects/uav_api/.claude/docs/architectural_patterns.md` — documents the lifespan, drain loop, and task-cancellation path on shutdown.
 
 ## Common pitfalls
 

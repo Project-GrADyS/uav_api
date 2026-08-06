@@ -11,7 +11,7 @@ pip install -e .
 Python 3.10+ is required (see `pyproject.toml`). Dev dependencies (`pytest`, `httpx`, `niquests` for HTTP/3 examples) are listed in `requirements.txt`.
 
 System dependencies (simulated mode only):
-- **ArduPilot** cloned at `~/ardupilot` (or any path passed via `--ardupilot_path`). SITL is launched from `Tools/autotest/sim_vehicle.py`.
+- **ArduPilot** cloned and built locally. SITL is launched from `Tools/autotest/sim_vehicle.py`, resolved two ways: with `--ardupilot_path` set, explicitly as `<ardupilot_path>/Tools/autotest/sim_vehicle.py`; without it (the default, `None`), as the bare `sim_vehicle.py` command looked up in `PATH` — so ArduPilot's `Tools/autotest` must be on `PATH` (`export PATH=$PATH:$HOME/ardupilot/Tools/autotest`, which ArduPilot's `install-prereqs-ubuntu.sh` adds to `~/.bashrc`).
 - **xterm** on `PATH`. The SITL process is spawned inside an `xterm` window so its console output stays visible; the lifespan teardown relies on `UAV_SITL_TAG` to kill the whole subtree on shutdown.
 - **tmux** on `PATH`, if you use `/mission/execute-script`.
 
@@ -26,10 +26,10 @@ Spawns ArduPilot SITL in an `xterm`, waits for it to come up, then the API conne
 
 ```bash
 # Copter (default)
-uav-api --simulated true --ardupilot_path ~/ardupilot --speedup 1 --port 8000 --sysid 1
+uav-api --simulated true --speedup 1 --port 8000 --sysid 1
 
 # Plane (beta — see plane-support.md)
-uav-api --vehicle plane --simulated true --ardupilot_path ~/ardupilot --speedup 1 --port 8000 --sysid 1
+uav-api --vehicle plane --simulated true --speedup 1 --port 8000 --sysid 1
 ```
 
 Or via INI file (sections `[api]`, `[simulated]`, `[logs]`):
@@ -94,7 +94,7 @@ Re-executing the same script while it is running returns HTTP 400. Use `POST /mi
 
 | Symptom | Likely cause |
 |---------|--------------|
-| `/telemetry/general` times out on startup (simulated) | `~/ardupilot` path wrong, or `xterm` not on PATH. Check the xterm window — SITL errors print there. |
+| `/telemetry/general` times out on startup (simulated) | `--ardupilot_path` wrong, or (when it is omitted) `sim_vehicle.py` not on `PATH` — check with `which sim_vehicle.py`. Also check `xterm` is on `PATH`; the xterm window is where SITL errors print. |
 | Arm endpoint hangs forever | GPS fix not yet acquired (especially on cold start). `GET /telemetry/gps_raw` shows `satelites` count (copter mode only). |
 | `/mission/*` or `/peripherical/*` returns 404 in plane mode | Expected — these routers are not registered when `--vehicle plane`. See plane-support.md. |
 | `/command/takeoff` returns 500 (plane mode) | Often a parameter / TAKEOFF-mode issue. SITL xterm log shows the specific reason. ArduPlane requires the vehicle to be armed (call `/command/arm` first). |

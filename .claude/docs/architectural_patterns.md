@@ -17,7 +17,7 @@ The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespa
 
 ### Conditional: copter only (`--vehicle` != `plane`)
 
-**Scripts watcher loop** (`lifespan.py:19, 158`)
+**Scripts watcher loop** (`lifespan.py:19, 160`)
 - `asyncio.create_task(scripts_watcher_loop(get_scripts_table()))`
 - Polls every 2s: for each `scripts_table` entry with `status="running"`, checks `tmux has-session`. If the session has ended (script exited naturally), marks the entry `status="stopped"`, records `stopped_at`, and runs a defensive `tmux kill-session`.
 - Only started when the mission router is registered (copter mode); plane mode has no script management.
@@ -27,6 +27,7 @@ The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespa
 
 **ArduPilot SITL process** (`start_sitl` in `lifespan.py:85`)
 - Spawns `xterm -e sim_vehicle.py -v {ArduCopter|ArduPlane} ...` as a subprocess; the vehicle binary is chosen by `args.vehicle` (`ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`)
+- `sim_vehicle.py` is resolved from `<args.ardupilot_path>/Tools/autotest/` when `--ardupilot_path` is given; otherwise (default `None`) the bare `sim_vehicle.py` command is passed to `xterm`, so the shell/`execvp` lookup resolves it through `PATH`
 - Tagged with a unique `UAV_SITL_TAG=SITL_ID_<sysid>` environment variable
 - After spawning, the lifespan waits 2s and checks `sitl_process.poll()`; if SITL exited immediately it logs the error, runs `cleanup_partial_startup`, and raises `RuntimeError` to abort startup
 - On shutdown, all system processes with that env tag are killed via `psutil` (`kill_sitl_by_tag` in `lifespan.py:39`)
@@ -34,7 +35,7 @@ The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespa
 
 ### Conditional: Gradys GS integration only (`--gradys_gs` is set)
 
-**GS location push coroutine** (`lifespan.py:165`)
+**GS location push coroutine** (`lifespan.py:167`)
 - `asyncio.create_task(send_location_to_gradys_gs(vehicle, session, ...))`
 - Defined in `uav_api/gradys_gs.py:35` — POSTs GPS position to `http://<gradys_gs>/update-info/` every second. Duck-types on `.get_gps_info()` and `.target_system`, which both `Copter` and `Plane` expose.
 - Uses a shared `aiohttp.ClientSession`; session is closed on shutdown after task cancellation
