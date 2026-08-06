@@ -80,7 +80,7 @@ The untested movement endpoints are the `_wait` variants (blocking versions of t
 
 ### Prerequisites
 
-- ArduPilot installed at `~/ardupilot` (or adjust `--ardupilot_path` in `conftest.py`)
+- ArduPilot installed at `~/ardupilot` — `conftest.py` passes `--ardupilot_path ~/ardupilot` explicitly, so adjust it there if your clone lives elsewhere (dropping the flag would fall back to resolving `sim_vehicle.py` from `PATH`)
 - `xterm` available on PATH (SITL launches in an xterm window)
 - Python packages: `pytest`, `requests`
 

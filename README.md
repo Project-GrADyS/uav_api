@@ -22,6 +22,8 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
 - [Getting Started](#getting-started)
   - [Running with a real drone](#running-with-a-real-drone)
   - [Running in simulation (SITL)](#running-in-simulation-sitl)
+    - [Locating ArduPilot (`--ardupilot_path`)](#locating-ardupilot---ardupilot_path)
+    - [Registering ArduPilot in PATH](#registering-ardupilot-in-path)
   - [Vehicle Types](#vehicle-types)
   - [Using a configuration file](#using-a-configuration-file)
   - [Spawning programmatically](#spawning-programmatically)
@@ -65,6 +67,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
 - For simulated flights: ArduPilot repository built locally, and `xterm` installed.
   - Clone and build ArduPilot: https://ardupilot.org/dev/docs/where-to-get-the-code.html
   - SITL setup guide: https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
+  - ArduPilot's `Tools/autotest` directory should be on your `PATH` so `sim_vehicle.py` can be found — see [Registering ArduPilot in PATH](#registering-ardupilot-in-path). Otherwise, point the API at the repository with `--ardupilot_path`.
 
 ## Installing from PyPI (recommended)
 
@@ -106,10 +109,51 @@ The `--connection_type` controls the UDP direction:
 This starts both ArduCopter SITL (in a new `xterm` window) and the API:
 
 ```bash
-uav-api --simulated true --ardupilot_path ~/ardupilot --speedup 1 --port 8000 --sysid 1
+uav-api --simulated true --speedup 1 --port 8000 --sysid 1
 ```
 
 SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`). The `--speedup` factor controls simulation speed (e.g. `5` = 5× real time). The `--location` argument sets the SITL home position (default `AbraDF`).
+
+### Locating ArduPilot (`--ardupilot_path`)
+
+Simulated mode launches SITL through ArduPilot's `sim_vehicle.py` script. How that script is located depends on whether `--ardupilot_path` is provided:
+
+| `--ardupilot_path` | How `sim_vehicle.py` is resolved |
+|--------------------|----------------------------------|
+| **omitted (default)** | The bare command `sim_vehicle.py` is executed, so it is resolved through the `PATH` environment variable. This requires ArduPilot's `Tools/autotest` directory to be registered in `PATH`. |
+| **provided** | The script is resolved explicitly as `<ardupilot_path>/Tools/autotest/sim_vehicle.py`. `~` is expanded, and `PATH` is ignored. |
+
+```bash
+# Default — sim_vehicle.py comes from PATH
+uav-api --simulated true --port 8000 --sysid 1
+
+# Explicit — use this ArduPilot repository, regardless of PATH
+uav-api --simulated true --ardupilot_path ~/ardupilot --port 8000 --sysid 1
+```
+
+Use `--ardupilot_path` when ArduPilot is not on your `PATH`, or when you keep several ArduPilot checkouts and want to select one per API instance.
+
+> If neither applies — no `--ardupilot_path` and no `sim_vehicle.py` on `PATH` — SITL exits immediately and the API aborts startup with `SITL failed to initialize`.
+
+### Registering ArduPilot in PATH
+
+Append ArduPilot's `Tools/autotest` directory to `PATH` in your shell profile (`~/.bashrc`, or `~/.zshrc` for zsh), replacing `~/ardupilot` with your clone location:
+
+```bash
+echo 'export PATH=$PATH:$HOME/ardupilot/Tools/autotest' >> ~/.bashrc
+source ~/.bashrc
+```
+
+ArduPilot's own environment installer (`Tools/environment_install/install-prereqs-ubuntu.sh`) adds this line for you, so if you followed the official SITL setup guide it is likely already done.
+
+Verify it worked:
+
+```bash
+which sim_vehicle.py
+# /home/<user>/ardupilot/Tools/autotest/sim_vehicle.py
+```
+
+If the command prints nothing, the directory is not on `PATH` — fix the export or pass `--ardupilot_path` instead.
 
 ## Vehicle Types
 
@@ -125,7 +169,7 @@ The API supports two ArduPilot vehicles, selected at startup with `--vehicle`:
 **Run as plane in simulation:**
 
 ```bash
-uav-api --vehicle plane --simulated true --ardupilot_path ~/ardupilot --speedup 1 --port 8000 --sysid 1
+uav-api --vehicle plane --simulated true --speedup 1 --port 8000 --sysid 1
 ```
 
 This spawns ArduPlane SITL (instead of ArduCopter) and registers only the plane routers. Consumer URLs are unchanged — `/command/arm`, `/movement/go_to_gps`, `/telemetry/gps` work the same way; the endpoint *set* is smaller. Plane mode exposes:
@@ -184,6 +228,8 @@ uav-api --config /path/to/config.ini
 
 CLI arguments always override values from the config file. Example config files for single and multi-UAV setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`.
 
+> `ardupilot_path` is optional here too — drop the key to resolve `sim_vehicle.py` from `PATH`. The mere presence of a `[simulated]` section turns simulated mode on.
+
 ## Spawning programmatically
 
 You can start the API from Python code using `spawn_with_args`, which runs the server in a background process:
@@ -194,7 +240,6 @@ from uav_api.run_api import spawn_with_args
 # Start a simulated UAV API on port 8001
 process = spawn_with_args([
     "--simulated", "true",
-    "--ardupilot_path", "~/ardupilot",
     "--speedup", "5",
     "--port", "8001",
     "--sysid", "1",
@@ -264,7 +309,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--simulated` | `false` | Set to `true` to spawn ArduPilot SITL alongside the API (binary is `ArduCopter` or `ArduPlane` depending on `--vehicle`) |
-| `--ardupilot_path` | `~/ardupilot` | Path to local ArduPilot repository |
+| `--ardupilot_path` | `None` | Path to local ArduPilot repository. When omitted, `sim_vehicle.py` is resolved from the `PATH` environment variable; when set, SITL is launched from `<ardupilot_path>/Tools/autotest/sim_vehicle.py`. See [Locating ArduPilot](#locating-ardupilot---ardupilot_path). |
 | `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`) |
 | `--speedup` | 1 | SITL simulation time multiplier |
 | `--gs_connection` | `[]` | Extra `host:port` addresses SITL streams telemetry to (e.g. Mission Planner) |
@@ -291,7 +336,7 @@ QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-si
 **Starting the API in UDP/QUIC mode:**
 
 ```bash
-uav-api --udp --simulated true --ardupilot_path ~/ardupilot --port 8000 --sysid 1
+uav-api --udp --simulated true --port 8000 --sysid 1
 ```
 
 **Consuming the API over HTTP/3 (QUIC):**
@@ -336,7 +381,7 @@ Each POST to `http://<gradys_gs>/update-info/` includes: latitude, longitude, al
 When running in simulated mode, use `--gs_connection` to stream MAVLink telemetry to Mission Planner (or any GCS software):
 
 ```bash
-uav-api --simulated true --ardupilot_path ~/ardupilot --sysid 1 --gs_connection [192.168.1.5:14550]
+uav-api --simulated true --sysid 1 --gs_connection [192.168.1.5:14550]
 ```
 
 Connect Mission Planner to the specified UDP address to see live position, attitude, and flight data.

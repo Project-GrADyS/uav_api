@@ -36,10 +36,10 @@ pip install -e .
 **Run the API (simulated — recommended starting point):**
 ```bash
 # Simulated copter (default; spawns ArduCopter SITL in xterm)
-uav-api --simulated true --ardupilot_path ~/ardupilot --speedup 1 --port 8000 --sysid 1
+uav-api --simulated true --speedup 1 --port 8000 --sysid 1
 
 # Simulated plane (beta; spawns ArduPlane SITL — see .claude/docs/plane-support.md)
-uav-api --vehicle plane --simulated true --ardupilot_path ~/ardupilot --speedup 1 --port 8000 --sysid 1
+uav-api --vehicle plane --simulated true --speedup 1 --port 8000 --sysid 1
 
 # Or via INI config file
 uav-api --config flight_examples/uavs/uav_1.ini
@@ -108,7 +108,7 @@ All arguments defined in `uav_api/args.py`. Can also be provided via INI config 
 ### Simulated mode only (`--simulated true`)
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--ardupilot_path` | `~/ardupilot` | Path to local ArduPilot repo — SITL is launched from `Tools/autotest/sim_vehicle.py` |
+| `--ardupilot_path` | None | Path to local ArduPilot repo — SITL is launched from `<ardupilot_path>/Tools/autotest/sim_vehicle.py`. When omitted, the bare `sim_vehicle.py` command is used, resolved via the `PATH` env var (ArduPilot's `Tools/autotest` must be on `PATH`). |
 | `--location` | `AbraDF` | Named home position for SITL (registered in `~/.config/ardupilot/locations.txt`) |
 | `--speedup` | 1 | SITL simulation time multiplier (e.g., `5` = 5× faster than real time) |
 | `--gs_connection` | `[]` | Extra `host:port` addresses SITL streams telemetry to (e.g., Mission Planner) |
@@ -126,7 +126,7 @@ All arguments defined in `uav_api/args.py`. Can also be provided via INI config 
 
 ## Key Entry Points
 - CLI entry: `uav_api/run_api.py` — starts uvicorn (default) or hypercorn (`--udp`)
-- App definition: `uav_api/api_app.py:37` (FastAPI app) and `:44` (conditional `--vehicle` router registration); lifespan in `uav_api/lifespan.py:113`
+- App definition: `uav_api/api_app.py:37` (FastAPI app) and `:45` (conditional `--vehicle` router registration); lifespan in `uav_api/lifespan.py:115`
 - Copter class: `uav_api/vehicles/copter.py:110`
 - Plane class: `uav_api/vehicles/plane.py:93`
 - Dependency injection: `uav_api/routers/router_dependencies.py` (`get_copter_instance`, `get_plane_instance`)

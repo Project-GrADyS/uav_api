@@ -87,8 +87,10 @@ def start_sitl(sitl_tag, args):
         env = os.environ.copy()
         env["UAV_SITL_TAG"] = sitl_tag # tag for identifying SITL processes later for cleanup
 
-        ardupilot_base = os.path.expanduser(args.ardupilot_path)
-        script_path = os.path.join(ardupilot_base, "Tools/autotest/sim_vehicle.py")
+        script_path = "sim_vehicle.py"
+        if args.ardupilot_path is not None:
+            ardupilot_base = os.path.expanduser(args.ardupilot_path)
+            script_path = os.path.join(ardupilot_base, "Tools/autotest/sim_vehicle.py")
         
         out_str = f"--out {args.uav_connection} {' '.join([f'--out {address}' for address in args.gs_connection])} "
         home_dir = os.path.expanduser("~")
@@ -100,7 +102,7 @@ def start_sitl(sitl_tag, args):
         logger.info(f"SITL started with PID {sitl_process.pid}.")
         return sitl_process
     except:
-        logger.error("Failed to start SITL. Ensure Ardupilot is correctly set up and the simulation parameters are valid.")
+        logger.error("Failed to start SITL. Ensure Ardupilot is correctly set up (sim_vehicle.py on PATH or --ardupilot_path set) and the simulation parameters are valid.")
         raise
 
 def cleanup_partial_startup(sitl_tag, args):
@@ -121,13 +123,13 @@ async def lifespan(app: FastAPI):
         try:
             sitl_process = start_sitl(sitl_tag, args)
         except Exception:
-            logger.error("SITL failed to initialize. Check --ardupilot_path and SITL parameters.")
+            logger.error("SITL failed to initialize. Check --ardupilot_path (or that sim_vehicle.py is on PATH) and SITL parameters.")
             cleanup_partial_startup(sitl_tag, args)
             raise
         # Give SITL a moment to come up and verify it did not exit immediately.
         await asyncio.sleep(2)
         if sitl_process.poll() is not None:
-            logger.error(f"SITL failed to initialize (process exited with code {sitl_process.returncode}). Check --ardupilot_path and SITL parameters.")
+            logger.error(f"SITL failed to initialize (process exited with code {sitl_process.returncode}). Check --ardupilot_path (or that sim_vehicle.py is on PATH) and SITL parameters.")
             cleanup_partial_startup(sitl_tag, args)
             raise RuntimeError("SITL failed to initialize")
 

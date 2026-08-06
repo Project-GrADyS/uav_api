@@ -170,8 +170,8 @@ def parse_simulated(simulated_parser):
     simulated_parser.add_argument(
         '--ardupilot_path',
         dest='ardupilot_path',
-        default='~/ardupilot',
-        help="Path for ardupilot repository"
+        default=None,
+        help="Path for ardupilot repository. If omitted, sim_vehicle.py is resolved from the PATH environment variable."
     )
 
 def parse_logs(logs_parser):
