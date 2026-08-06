@@ -170,7 +170,7 @@ def parse_simulated(simulated_parser):
     simulated_parser.add_argument(
         '--ardupilot_path',
         dest='ardupilot_path',
-        default='~/ardupilot',
+        default=None,
         help="Path for ardupilot repository"
     )
 

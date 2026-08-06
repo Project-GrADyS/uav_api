@@ -87,8 +87,10 @@ def start_sitl(sitl_tag, args):
         env = os.environ.copy()
         env["UAV_SITL_TAG"] = sitl_tag # tag for identifying SITL processes later for cleanup
 
-        ardupilot_base = os.path.expanduser(args.ardupilot_path)
-        script_path = os.path.join(ardupilot_base, "Tools/autotest/sim_vehicle.py")
+        script_path = "sim_vehicle.py"
+        if args.ardupilot_path is not None:
+            ardupilot_base = os.path.expanduser(args.ardupilot_path)
+            script_path = os.path.join(ardupilot_base, "Tools/autotest/sim_vehicle.py")
         
         out_str = f"--out {args.uav_connection} {' '.join([f'--out {address}' for address in args.gs_connection])} "
         home_dir = os.path.expanduser("~")

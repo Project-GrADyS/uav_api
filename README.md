@@ -264,7 +264,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--simulated` | `false` | Set to `true` to spawn ArduPilot SITL alongside the API (binary is `ArduCopter` or `ArduPlane` depending on `--vehicle`) |
-| `--ardupilot_path` | `~/ardupilot` | Path to local ArduPilot repository |
+| `--ardupilot_path` | `None` | Path to local ArduPilot repository |
 | `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`) |
 | `--speedup` | 1 | SITL simulation time multiplier |
 | `--gs_connection` | `[]` | Extra `host:port` addresses SITL streams telemetry to (e.g. Mission Planner) |
