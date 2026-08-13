@@ -590,6 +590,7 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | `flight_examples/` | Example client scripts and INI config files (Copter) |
 | `packaging/systemd/uav-api.service` | Canonical systemd unit for running the API on a companion computer |
 | `packaging/uav-api.ini.example` | Canonical real-drone INI config example |
+| `scripts/install_service.sh` | Deprecated single-drone installer — see [Deploying on hardware](#deploying-on-hardware) |
 
 ## Processes and Coroutines
 
