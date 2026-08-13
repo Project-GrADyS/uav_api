@@ -29,6 +29,27 @@ def parse_config_file(file_path):
     config.read(file_path)
     print(config.sections())
 
+_TRUE_VALUES = {"true", "yes", "on", "1"}
+_FALSE_VALUES = {"false", "no", "off", "0"}
+
+def coerce_bool(key, value):
+    """Read a config-file value as a boolean.
+
+    Config values arrive as strings, so an uncoerced `headless = false` would be
+    the truthy string "false" and silently turn the option ON. An unrecognised
+    value raises rather than falling back to truthiness: a service refusing to
+    start beats a vehicle running in a mode nobody asked for.
+    """
+    normalized = value.strip().lower()
+    if normalized in _TRUE_VALUES:
+        return True
+    if normalized in _FALSE_VALUES:
+        return False
+    raise ValueError(
+        f"Invalid boolean for '{key}': {value!r}. Use one of "
+        f"{sorted(_TRUE_VALUES)} or {sorted(_FALSE_VALUES)}."
+    )
+
 def parse_args(raw_args=None):
     parser = argparse.ArgumentParser(description="Welcome to the UAV Runner, this script runs an API that interfaces with Ardupilots instances (real or simulated).")
     parse_mode(parser)
@@ -49,7 +70,13 @@ def parse_args(raw_args=None):
         for section in config.sections():
             for key, value in config.items(section):
                 if hasattr(args, key):
-                    if value[0] == "[":
+                    # An argument whose parsed default is a bool is a boolean
+                    # argument -- no hardcoded list of names to keep in step.
+                    # This runs after the `[simulated]` rule above, so an
+                    # explicit `simulated = false` key overrides it.
+                    if isinstance(getattr(args, key), bool):
+                        value = coerce_bool(key, value)
+                    elif value.startswith("["):
                         # Drop empty entries: "[]".strip("[]") is "", and
                         # "".split(",") is [""] -- never an empty list. Without
                         # this filter, `gs_connection=[]` yields [""], which

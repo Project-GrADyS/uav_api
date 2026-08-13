@@ -49,11 +49,15 @@ user can write to them.
 The config file is read *after* the command line, so **values in the file
 override CLI arguments**. Two consequences that bite on real hardware:
 
-- **A real-drone config must not contain a `[simulated]` section.** Its mere
-  presence switches the API into simulated mode whatever it contains; there is no
-  `simulated = false` to turn it back off.
+- **A real-drone config should not contain a `[simulated]` section.** Its mere
+  presence switches the API into simulated mode whatever it contains. An explicit
+  `simulated = false` overrides that, but relying on it is asking for trouble —
+  leave the section out.
 - `sysid` must match the flight controller's `SYSID_THISMAV` parameter. Nothing
   validates this — a mismatch looks exactly like receiving no MAVLink at all.
+- Boolean keys accept `true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0`. An
+  unrecognised value aborts startup instead of being guessed at, so a typo shows
+  up in `journalctl` rather than in the vehicle's behaviour.
 
 Unlike SITL, where several vehicles share one host and ports are offset per
 vehicle, each drone is its own host, so `port` stays at 8000 across the fleet.

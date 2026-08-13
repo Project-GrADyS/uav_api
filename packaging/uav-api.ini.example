@@ -8,7 +8,8 @@
 ;
 ; IMPORTANT: a real-drone config must NOT contain a [simulated] section. The
 ; mere presence of that section switches the API into simulated mode, whatever
-; its contents -- there is no `simulated = false` to turn it back off.
+; its contents. An explicit `simulated = false` does override it, but do not
+; rely on that -- leave the section out entirely.
 ;
 ; NOTE: values present here take precedence over command-line arguments.
 

@@ -281,11 +281,13 @@ uav-api --config /path/to/config.ini
 
 Only write the keys you actually want to change; omitting a key gives you its default. In particular, do **not** write `None` as a value: INI values are read as strings, so `log_path = None` produces a log file literally named `None` rather than the default path.
 
+Boolean keys (`simulated`, `udp`, `headless`) accept `true`/`false`, `yes`/`no`, `on`/`off` or `1`/`0`, in any case. Anything else is rejected at startup rather than guessed at.
+
 Example config files for single and multi-UAV simulated setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`. For a real drone, start from [`packaging/uav-api.ini.example`](packaging/uav-api.ini.example).
 
 > `ardupilot_path` is optional here too — drop the key to resolve `sim_vehicle.py` from `PATH`.
 
-> **The mere presence of a `[simulated]` section turns simulated mode on**, whatever the section contains — there is no `simulated = false` to switch it back off. A real-drone config must not have the section at all.
+> **The mere presence of a `[simulated]` section turns simulated mode on**, whatever the section contains. An explicit `simulated = false` key overrides that, since keys are applied after the section is detected — but a real-drone config is clearest with no `[simulated]` section at all.
 
 ## Spawning programmatically
 
