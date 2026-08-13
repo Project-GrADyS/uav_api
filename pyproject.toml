@@ -13,11 +13,9 @@ keywords = ["mavlink", "http", "simulation", "gradys", "LAC", "PUC", "drone", "a
 authors = [
     { name = "Francisco Meirelles Fleury", email = "franmeifleury@gmail.com" }
 ]
-license = { file = "LICENSE.txt" }
 readme = "README.md"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 requires-python = ">=3.10"
