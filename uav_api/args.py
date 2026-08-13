@@ -50,8 +50,11 @@ def parse_args(raw_args=None):
             for key, value in config.items(section):
                 if hasattr(args, key):
                     if value[0] == "[":
-                        value = value.strip("[]").split(",")
-                        value = [v.strip() for v in value]
+                        # Drop empty entries: "[]".strip("[]") is "", and
+                        # "".split(",") is [""] -- never an empty list. Without
+                        # this filter, `gs_connection=[]` yields [""], which
+                        # becomes a dangling `--out ` in the SITL command line.
+                        value = [v.strip() for v in value.strip("[]").split(",") if v.strip()]
                     setattr(args, key, value)
                 else:
                     print(f"Warning: {key} not found in args")

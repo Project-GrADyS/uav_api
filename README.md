@@ -210,13 +210,11 @@ sysid=1
 [simulated]
 ardupilot_path=~/ardupilot
 location=AbraDF
-gs_connection=[]
 speedup=1
 
 [logs]
-log_console=[]
+log_console=[VEHICLE, UVICORN]
 log_path=None
-debug=[]
 script_logs=None
 ```
 
