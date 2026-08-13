@@ -15,6 +15,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
 
 ## Table of Contents
 
+- [Documentation](#documentation)
 - [Installation](#installation)
   - [Prerequisites](#prerequisites)
   - [Installing from PyPI (recommended)](#installing-from-pypi-recommended)
@@ -57,6 +58,20 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
   - [Make polygon with Drive](#make-polygon-with-drive)
   - [Delivery Mission Simulation](#delivery-mission-simulation)
   - [GPS-Based Follower](#gps-based-follower)
+
+---
+
+# Documentation
+
+This README covers installation, running the API, the CLI reference and the
+example clients. Reference material lives under [`docs/`](docs/):
+
+| Document | Contents |
+|----------|----------|
+| [`docs/api-specification.md`](docs/api-specification.md) | **The HTTP contract.** Every endpoint's path, query/body schema and response shape. This is what the GrADyS ecosystem codes against — update it before changing an endpoint. |
+| [`docs/coordinate-frames.md`](docs/coordinate-frames.md) | GPS vs NED vs NED-velocity, why `z` is negative for altitude, and common MAVLink pitfalls. Read before writing movement logic. |
+| [`docs/plane-support.md`](docs/plane-support.md) | Plane (beta) endpoint reference and how its behaviour differs from copter. |
+| [`docs/deployment.md`](docs/deployment.md) | Running the API as a systemd service on a companion computer, and fleet provisioning. |
 
 ---
 
@@ -204,7 +219,7 @@ The API supports two ArduPilot vehicles, selected at startup with `--vehicle`:
 | ArduCopter (QuadCopter) | `--vehicle copter` *(default)* | Stable — full router surface, integration tests pass. |
 | ArduPlane / QuadPlane | `--vehicle plane` | **Beta** |
 
-> ⚠️ **Beta**: Plane support is in beta — some functionalities may not work as intended. The plane endpoint surface is intentionally smaller than copter (no `/mission/*`, no `/peripherical/*`, fewer movement endpoints) and there are no integration tests yet. Treat as preview. Full details in [`.claude/docs/plane-support.md`](.claude/docs/plane-support.md).
+> ⚠️ **Beta**: Plane support is in beta — some functionalities may not work as intended. The plane endpoint surface is intentionally smaller than copter (no `/mission/*`, no `/peripherical/*`, fewer movement endpoints) and there are no integration tests yet. Treat as preview. Full details in [`docs/plane-support.md`](docs/plane-support.md).
 
 **Run as plane in simulation:**
 
