@@ -1,5 +1,26 @@
 import logging
 import logging.config
+import os
+
+
+def resolve_log_file(log_path):
+    """Expand a configured log path and make sure its directory exists.
+
+    Both callers below hand this straight to `logging.FileHandler`, which opens
+    the file eagerly at `dictConfig` time -- a missing parent directory aborts
+    startup with `ValueError: Unable to configure handler`. The fix has to live
+    here rather than in `setup()`, because `run_api.run_with_args` configures
+    logging *before* it calls `setup()`.
+
+    Also expands `~`: nothing else in the codebase does, so an INI written with
+    `log_path = ~/uav_api_logs/...` would otherwise resolve to a literal `./~`
+    directory even when the real one exists.
+    """
+    resolved = os.path.expanduser(log_path)
+    parent = os.path.dirname(os.path.abspath(resolved))
+    os.makedirs(parent, exist_ok=True)
+    return resolved
+
 
 def build_hypercorn_log_config(args):
     """Build a logging dictConfig dict for Hypercorn loggers.
@@ -39,7 +60,7 @@ def build_hypercorn_log_config(args):
     if args.log_path:
         logging_config['handlers']['file_handler'] = {
             'class': 'logging.FileHandler',
-            'filename': args.log_path,
+            'filename': resolve_log_file(args.log_path),
             'formatter': 'file_formatter'
         }
         for logger in logging_config['loggers'].values():
@@ -112,7 +133,7 @@ def set_log_config(args):
     if args.log_path:
         logging_config['handlers']['file_handler'] = {
             'class': 'logging.FileHandler',
-            'filename': args.log_path,
+            'filename': resolve_log_file(args.log_path),
             'formatter': 'file_formatter'
         }
         for logger in logging_config['loggers'].values():

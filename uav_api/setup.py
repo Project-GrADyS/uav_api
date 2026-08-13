@@ -4,21 +4,29 @@ import datetime
 
 logger = logging.getLogger("SYSTEM")
 
-def ensure_home_subdir_exists(subdir_name):
-    home_dir = os.path.expanduser("~")  # Gets the home directory path
-    target_path = os.path.join(home_dir, subdir_name)
+def _resolve_home_path(path):
+    """Resolve a path given relative to the home directory.
 
-    if not os.path.exists(target_path):
-        os.makedirs(target_path)
-        logger.info(f"Created directory: {target_path}")
-    else:
-        logger.info(f"Directory already exists: {target_path}")
+    `os.path.join(home, "~/x")` yields a literal `~` directory, so expand first;
+    an absolute path passes through unchanged.
+    """
+    return os.path.join(os.path.expanduser("~"), os.path.expanduser(path))
+
+def ensure_dir_exists(path):
+    """Create a directory and its parents. Accepts absolute or ~-relative paths."""
+    target_path = os.path.expanduser(path)
+    os.makedirs(target_path, exist_ok=True)
+    logger.info(f"Directory ready: {target_path}")
+    return target_path
+
+def ensure_home_subdir_exists(subdir_name):
+    ensure_dir_exists(_resolve_home_path(subdir_name))
 
 def ensure_home_file_exists(filename, content=""):
-    home_dir = os.path.expanduser("~")  # Gets the user's home directory
-    file_path = os.path.join(home_dir, filename)
+    file_path = _resolve_home_path(filename)
 
     if not os.path.isfile(file_path):
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'w') as f:
             f.write(content)
         logger.info(f"Created file: {file_path}")
@@ -95,26 +103,44 @@ def setup(args):
     ensure_home_subdir_exists(".config/ardupilot")
     ensure_home_file_exists(".config/ardupilot/locations.txt", locations)
 
-    if args.log_path is None:
-        ensure_home_subdir_exists("uav_api_logs")
-        ensure_home_subdir_exists("uav_api_logs/uav_logs")
-        ensure_home_file_exists(f"uav_api_logs/uav_logs/uav_{args.sysid}.log")
-        if args.simulated:
-            ensure_home_subdir_exists("uav_api_logs/ardupilot_logs")
+    # Each of the three directories below is resolved and created unconditionally,
+    # whether the path was defaulted here or supplied in a config file. The
+    # `if ... is None` guards only choose the default; they must not also be the
+    # only thing that creates the directory, because a deployment that configures
+    # these paths explicitly then gets none of them.
 
-        home_dir = os.path.expanduser("~")  # Gets the user's home directory
-        args.log_path = os.path.join(home_dir, "uav_api_logs","uav_logs",f"uav_{args.sysid}.log")
+    if args.log_path is None:
+        args.log_path = _resolve_home_path(
+            os.path.join("uav_api_logs", "uav_logs", f"uav_{args.sysid}.log")
+        )
+
+    args.log_path = os.path.expanduser(args.log_path)
+    # log.resolve_log_file creates this too -- it has to, because logging is
+    # configured before setup() runs -- but doing it here keeps setup() honest
+    # about what it guarantees.
+    ensure_dir_exists(os.path.dirname(os.path.abspath(args.log_path)))
+
+    if args.simulated:
+        # lifespan.py passes this to sim_vehicle.py as --use-dir regardless of
+        # what log_path is set to, so it cannot hang off the branch above.
+        ensure_home_subdir_exists("uav_api_logs/ardupilot_logs")
 
     if args.script_logs is None:
-        ensure_home_subdir_exists("uav_api_logs")
-        ensure_home_subdir_exists("uav_api_logs/script_logs")
+        args.script_logs = _resolve_home_path(os.path.join("uav_api_logs", "script_logs"))
 
-        home_dir = os.path.expanduser("~")  # Gets the user's home directory
-        args.script_logs = os.path.join(home_dir, "uav_api_logs","script_logs")
+    # A missing script_logs directory fails silently and expensively:
+    # /mission/execute-script builds a shell redirection into it, so bash aborts
+    # before running python while tmux still starts and the endpoint still
+    # returns 200. The caller sees a script that ran and finished instantly.
+    args.script_logs = ensure_dir_exists(args.script_logs)
 
+    # scripts_path defaults to the literal string "~/uav_scripts" rather than
+    # None, so the guard alone never created it and /mission/upload-script
+    # returned 500.
     if args.scripts_path is None:
-        ensure_home_subdir_exists("uav_scripts")
-        args.scripts_path = os.path.join(home_dir, "uav_scripts")
+        args.scripts_path = _resolve_home_path("uav_scripts")
+
+    args.scripts_path = ensure_dir_exists(args.scripts_path)
 
     args = ensure_dev_certs(args)
 
