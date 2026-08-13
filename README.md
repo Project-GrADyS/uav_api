@@ -254,8 +254,6 @@ speedup=1
 
 [logs]
 log_console=[VEHICLE, UVICORN]
-log_path=None
-script_logs=None
 ```
 
 Run with:
@@ -264,9 +262,15 @@ Run with:
 uav-api --config /path/to/config.ini
 ```
 
-CLI arguments always override values from the config file. Example config files for single and multi-UAV setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`.
+**Values in the config file override CLI arguments.** The file is read after the command line is parsed, and every key it contains is written over the parsed value — so `uav-api --config drone.ini --port 9000` still listens on the port set in the file.
 
-> `ardupilot_path` is optional here too — drop the key to resolve `sim_vehicle.py` from `PATH`. The mere presence of a `[simulated]` section turns simulated mode on.
+Only write the keys you actually want to change; omitting a key gives you its default. In particular, do **not** write `None` as a value: INI values are read as strings, so `log_path = None` produces a log file literally named `None` rather than the default path.
+
+Example config files for single and multi-UAV simulated setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`. For a real drone, start from [`packaging/uav-api.ini.example`](packaging/uav-api.ini.example).
+
+> `ardupilot_path` is optional here too — drop the key to resolve `sim_vehicle.py` from `PATH`.
+
+> **The mere presence of a `[simulated]` section turns simulated mode on**, whatever the section contains — there is no `simulated = false` to switch it back off. A real-drone config must not have the section at all.
 
 ## Spawning programmatically
 
@@ -321,7 +325,7 @@ A successful response confirms the API is connected to the vehicle:
 
 # CLI Arguments Reference
 
-All arguments can be passed on the command line or set in an INI config file. Run `uav-api --help` for a quick reference.
+All arguments can be passed on the command line or set in an INI config file. Run `uav-api --help` for a quick reference. Note that when both are used, [values in the config file win](#using-a-configuration-file).
 
 ## General (all modes)
 
@@ -333,7 +337,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | `--sysid` | 10 | MAVLink system ID; must match the drone's `SYSID_THISMAV` parameter |
 | `--uav_connection` | `127.0.0.1:17171` | MAVLink address — `host:port` for UDP, or serial device path for USB |
 | `--gradys_gs` | None | `host:port` of Gradys Ground Station — enables periodic GPS location push |
-| `--scripts_path` | `~/uav_scripts` | Directory where uploaded scripts are saved and executed from (copter mode) |
+| `--scripts_path` | `~/uav_scripts` | Directory where uploaded scripts are saved and executed from (copter mode). Created at startup if missing. |
 | `--python_path` | `python3` | Python binary used to run uploaded `.py` scripts |
 
 ## Connection (real drone)
@@ -357,9 +361,11 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--log_console` | `[]` | Components to print logs to console: `VEHICLE` `UVICORN` `GRADYS_GS` `SCRIPT`. `VEHICLE` is vehicle-agnostic — see [Logging in different vehicles](#logging-in-different-vehicles) for the prefix actually printed. |
-| `--log_path` | None | File path to write all component logs combined |
+| `--log_path` | `~/uav_api_logs/uav_logs/uav_<sysid>.log` | File path to write all component logs combined. Its parent directory is created at startup. |
 | `--debug` | `[]` | Same component names as `--log_console` but at DEBUG verbosity |
-| `--script_logs` | None | Directory where script stdout/stderr are saved as timestamped `.log` files |
+| `--script_logs` | `~/uav_api_logs/script_logs` | Directory where script stdout/stderr are saved as timestamped `.log` files. Created at startup if missing. |
+
+> The API creates the directories it needs at startup — `scripts_path`, `script_logs`, and the parent of `log_path` — whether the path came from the default or from a config file, expanding `~` along the way. Nothing has to pre-create them for it.
 
 ## UDP/QUIC mode
 
@@ -574,7 +580,7 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | `uav_api/routers/router_dependencies.py` | Lazy singletons `get_copter_instance` / `get_plane_instance` + `args` via `Depends()` |
 | `uav_api/gradys_gs.py` | Async coroutine that POSTs GPS location to Gradys GS every second |
 | `uav_api/log.py` | Logger configuration; routes `VEHICLE` token to `COPTER`/`PLANE` logger based on `--vehicle` |
-| `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ArduPilot config) |
+| `uav_api/setup.py` | Idempotent startup setup — creates the scripts, script-log and log directories (defaulted or configured) plus the ArduPilot locations file |
 | `uav_api/routers/copter_command.py` | Copter endpoints: arm, takeoff, land, RTL, speed, home |
 | `uav_api/routers/copter_movement.py` | Copter endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
 | `uav_api/routers/copter_telemetry.py` | Copter endpoints: GPS, NED, compass, battery, sensor status, home info |
