@@ -2,13 +2,13 @@
 
 > **Ecosystem contract.** This document is the authoritative HTTP contract for uav_api. The sibling projects consume it:
 >
-> - **gradys-embedded** calls `/command`, `/movement`, and `/telemetry/gps` from each drone's local uav_api process. See `/home/fleury/gradys/major_projects/gradys-embedded/.claude/docs/mobility-and-telemetry.md` — explains how `MobilityCommand` is mapped onto these endpoints.
-> - **gradys-gs** calls `/command`, `/telemetry/*`, and `/mission/*` during mission coordination. See `/home/fleury/gradys/major_projects/gradys-gs/.claude/docs/external_integrations.md` — explains how UI commands are dispatched over HTTP.
-> - **gradys-sim-nextgen** protocols are deployed through gradys-embedded, so they reach these endpoints indirectly.
+> - [**gradys-embedded**](https://github.com/Project-GrADyS/gradys-embedded) calls `/command`, `/movement`, and `/telemetry/gps` from each drone's local uav_api process, mapping its `MobilityCommand` onto these endpoints.
+> - **gradys-gs** calls `/command`, `/telemetry/*`, and `/mission/*` during mission coordination, dispatching UI actions over HTTP.
+> - [**gradys-sim-nextgen**](https://github.com/Project-GrADyS/gradys-sim-nextgen) protocols are deployed through gradys-embedded, so they reach these endpoints indirectly.
 >
 > When modifying an endpoint (path, query params, body, response shape), update this spec first, then update every consumer. Consumers must not redefine endpoints — they point here.
 
-> **Scope: `--vehicle copter` (default).** This file documents the endpoint set registered in copter mode. Plane mode (`--vehicle plane`, beta) shares the same URL prefixes (`/command`, `/movement`, `/telemetry`) but exposes a smaller subset and behaves differently in places (e.g. takeoff path, RTL completion, no `/mission` or `/peripherical`). See `plane-support.md` for the plane endpoint reference and behavioural delta.
+> **Scope: `--vehicle copter` (default).** This file documents the endpoint set registered in copter mode. Plane mode (`--vehicle plane`, beta) shares the same URL prefixes (`/command`, `/movement`, `/telemetry`) but exposes a smaller subset and behaves differently in places (e.g. takeoff path, RTL completion, no `/mission` or `/peripherical`). See [`plane-support.md`](plane-support.md) for the plane endpoint reference and behavioural delta.
 
 Base URL: `http://localhost:<port>`
 Interactive docs: `http://localhost:<port>/docs`

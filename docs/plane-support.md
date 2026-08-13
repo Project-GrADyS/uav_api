@@ -4,7 +4,7 @@
 
 ArduPlane / QuadPlane support runs side-by-side with the original Copter path. The selection is made once at startup via `--vehicle {copter|plane}` (default `copter`) and decides which routers register and which ArduPilot SITL spawns. Consumer URLs (`/command/*`, `/movement/*`, `/telemetry/*`) keep the same prefixes regardless, so `gradys-embedded` and `gradys-gs` do not need to know which vehicle is on the other side.
 
-For copter (default) endpoint contracts see `specification.md`. The shared lifespan / DI / drain-loop architecture is in `architectural_patterns.md`.
+For copter (default) endpoint contracts see [`api-specification.md`](api-specification.md). The shared lifespan / dependency-injection / drain-loop architecture is summarised in the README's [Project Architecture](../README.md#project-architecture) section.
 
 ---
 
@@ -50,7 +50,7 @@ For copter (default) endpoint contracts see `specification.md`. The shared lifes
 
 Inside `lifespan.py:lifespan`:
 
-1. **SITL spawn** (`start_sitl` in `lifespan.py:85`) — `ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`, then `xterm -e sim_vehicle.py -v {ardupilot_vehicle} -I {sysid} …`.
+1. **SITL spawn** (`start_sitl` in `lifespan.py:85`) — `ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`, then `xterm -e sim_vehicle.py -v {ardupilot_vehicle} -I {sysid} …` (the `xterm -e` prefix is dropped under `--headless`).
 2. **Singleton selection** (`lifespan.py:147-150`):
    ```python
    if args.vehicle == "plane":
@@ -105,7 +105,7 @@ All endpoints share the standard envelope `{"device": "uav", "id": "<sysid>", "r
 
 ### `/telemetry`
 
-All GET, no body. `info` field shape matches `specification.md` for the corresponding copter endpoints — same scaling (`÷1e7` for lat/lon, `÷1000` for alt, `÷100` for velocity and heading).
+All GET, no body. `info` field shape matches [`api-specification.md`](api-specification.md) for the corresponding copter endpoints — same scaling (`÷1e7` for lat/lon, `÷1000` for alt, `÷100` for velocity and heading).
 
 | Path | Source MAVLink message |
 |------|------------------------|
@@ -140,6 +140,6 @@ The CLI tokens `VEHICLE` (in `--log_console` / `--debug`) route to the active ve
 
 ## Cross-references
 
-- `specification.md` — full copter endpoint contract.
-- `architectural_patterns.md` — lifespan, singleton DI, drain loop, response envelope.
-- `mavlink-and-coordinate-frames.md` — MAVLink-level gotchas (mostly copter examples but applies to plane).
+- [`api-specification.md`](api-specification.md) — full copter endpoint contract.
+- [`coordinate-frames.md`](coordinate-frames.md) — MAVLink-level gotchas (mostly copter examples, but they apply to plane).
+- [README — Project Architecture](../README.md#project-architecture) — lifespan, singleton DI, drain loop, response envelope.

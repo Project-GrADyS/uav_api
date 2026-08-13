@@ -1,6 +1,6 @@
 # MAVLink & Coordinate Frames
 
-Domain knowledge that does not live in any single file: coordinate frames, SITL launch quirks, real-drone connection tradeoffs, and common MAVLink pitfalls. Read this before writing new movement logic or debugging connection/position issues.
+Coordinate frames, SITL launch quirks, real-drone connection tradeoffs, and common MAVLink pitfalls. Read this before writing movement logic against the API or debugging a connection/position issue.
 
 ## Coordinate frames
 
@@ -9,7 +9,7 @@ Three frames appear in the API surface:
 ### 1. GPS (absolute)
 Units: degrees of latitude/longitude, meters MSL for altitude.
 
-Used by `/movement/go_to_gps` and all `/telemetry/gps*` endpoints. `/telemetry/gps` scales raw MAVLink ints to floats (lat/lon ÷ 1e7, alt ÷ 1000, velocity ÷ 100) — see `/home/fleury/gradys/major_projects/uav_api/.claude/docs/specification.md` — gives the full response shape.
+Used by `/movement/go_to_gps` and all `/telemetry/gps*` endpoints. `/telemetry/gps` scales raw MAVLink ints to floats (lat/lon ÷ 1e7, alt ÷ 1000, velocity ÷ 100); [`api-specification.md`](api-specification.md) gives the full response shape.
 
 `relative_alt` in the GPS response is meters **above HOME**, not above ground level; differences matter when flying over terrain that is not level with the takeoff point.
 
@@ -18,18 +18,25 @@ Units: meters. Axes: **N**orth, **E**ast, **D**own.
 
 **`z` is negative for altitude above HOME.** A drone hovering 20 m above takeoff reports `z = -20`. Every `go_to_ned`/`drive` call that expects to stay airborne must pass a negative `z`. Positive `z` is below the HOME plane (toward the ground or below it).
 
-NED is only defined once HOME is known, which happens at arming. Client scripts call `get_home_ned` **after arm, before takeoff** — the recorded tuple is used with `ned_relative_to_absolute()` (see `/home/fleury/gradys/major_projects/uav_api/.claude/docs/flight-examples-map.md` — helper function reference for the `flight_examples/` client pattern).
+NED is only defined once HOME is known, which happens at arming. Client scripts call `get_home_ned` **after arm, before takeoff**, and use the recorded tuple with `ned_relative_to_absolute()` — see the runnable clients under `flight_examples/` and their shared `flight_helpers.py`.
 
 ### 3. NED velocity
 Same axes, but meters/s. Used only by `/movement/travel_at_ned`. Note the body model (`Local_velocity`: `vx`, `vy`, `vz`) differs from the position model (`Local_pos`: `x`, `y`, `z`) — copying a position into a velocity call silently fails.
 
 ### GPS ↔ NED conversions
 
-`copter.py` computes a longitude scale as `cos(lat * radians(1))` (see `Copter.longitude_scale`). Internally, NED positions are projected back to GPS with this scale when needed. Clients rarely need to convert by hand; when they do, the helper in gradys-embedded is a reference implementation (see `/home/fleury/gradys/major_projects/gradys-embedded/.claude/docs/mobility-and-telemetry.md` — documents the cartesian↔GPS conversion using a shared origin).
+`copter.py` computes a longitude scale as `cos(lat * radians(1))` (see `Copter.longitude_scale`). Internally, NED positions are projected back to GPS with this scale when needed. Clients rarely need to convert by hand; when they do, [gradys-embedded](https://github.com/Project-GrADyS/gradys-embedded) has a reference implementation of the cartesian↔GPS conversion against a shared origin.
 
 ## SITL quirks (`--simulated true`)
 
-**xterm wrapping.** SITL is spawned as `xterm -e sim_vehicle.py ...` (see `start_sitl` in `lifespan.py:85`). The xterm window is the only place SITL stderr/stdout land, so if SITL fails to come up, the API will just time out on its connect retries while the xterm shows the real error. Always check the xterm window first.
+**xterm wrapping.** By default SITL is spawned as `xterm -e sim_vehicle.py ...` (see `start_sitl` in `lifespan.py:85`). The xterm window is the only place SITL stderr/stdout land, so if SITL fails to come up, the API will just time out on its connect retries while the xterm shows the real error. Always check the xterm window first.
+
+**Headless mode.** `--headless` drops the `xterm -e` wrapper, removes `DISPLAY`, `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ` from SITL's environment, and passes `--mavproxy-args=--daemon`. All three are needed:
+
+- ArduPilot's `run_in_terminal_window.sh` starts the vehicle binary in whatever terminal those variables name, and only falls back to a background process when none are set — so the env scrub, not just the missing `xterm -e`, is what stops a window appearing.
+- MAVProxy exits as soon as its stdin reports EOF (`input_loop` in `mavproxy.py`), and `sim_vehicle.py` blocks on MAVProxy and exits with it. Headless without `--daemon` therefore dies instantly, and the API reports `SITL failed to initialize` two seconds later.
+
+Output moves to files — `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` for `sim_vehicle.py` and MAVProxy, and `/tmp/<vehicle>.log` (ArduPilot's choice of path, with no sysid in it) for the vehicle binary. Read those instead of an xterm when a headless SITL fails to start; there is no interactive `MAV>` prompt in this mode.
 
 **UAV_SITL_TAG process tracking.** The subprocess gets `UAV_SITL_TAG=SITL_ID_<sysid>` in its environment. On shutdown, `psutil` walks the process table looking for that tag and calls `kill()` on every match (xterms are stubborn; `terminate()` often does not work). If you ever see zombie SITL processes, it is because they were spawned without the tag — not the normal path.
 
@@ -57,7 +64,7 @@ Source system/component is hardcoded to `(250, 250)` — a GCS-class ID that Ard
 
 After `connect()`, `set_streamrate(self.streamrate)` requests `MAV_DATA_STREAM_ALL` at the configured rate and blocks until a `SYSTEM_TIME` message arrives (proves the link is up). Typical failure mode: timeout after 20 s → `TimeoutException`. Raise `--streamrate` cautiously; high rates over poor radio links drop more messages than they gain.
 
-The async drain loop (`lifespan.py:153`) continuously reads MAVLink messages so the pymavlink buffer does not fill and stall new requests. It runs for the entire lifespan; if you see telemetry going stale in a long session, check that the task is still alive. See `/home/fleury/gradys/major_projects/uav_api/.claude/docs/architectural_patterns.md` — documents the lifespan, drain loop, and task-cancellation path on shutdown.
+The async drain loop (`lifespan.py:153`) continuously reads MAVLink messages so the pymavlink buffer does not fill and stall new requests. It runs for the entire lifespan; if you see telemetry going stale in a long session, check that the task is still alive. The [Project Architecture](../README.md#project-architecture) section of the README covers the lifespan and its background tasks.
 
 ## Common pitfalls
 
@@ -72,6 +79,6 @@ The async drain loop (`lifespan.py:153`) continuously reads MAVLink messages so 
 
 ## Related docs
 
-- `/home/fleury/gradys/major_projects/uav_api/.claude/docs/specification.md` — the endpoint contract these conventions apply to.
-- `/home/fleury/gradys/major_projects/uav_api/.claude/docs/dev-and-run.md` — how to start the API in simulated or real mode.
-- `/home/fleury/gradys/major_projects/uav_api/.claude/docs/architectural_patterns.md` — lifespan, naming conventions, fire-and-forget vs `_wait` endpoint pairs.
+- [`api-specification.md`](api-specification.md) — the endpoint contract these conventions apply to.
+- [`plane-support.md`](plane-support.md) — where plane (beta) behaviour diverges from copter.
+- [README — Getting Started](../README.md#getting-started) — how to start the API in simulated or real mode.

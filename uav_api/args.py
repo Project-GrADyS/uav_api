@@ -29,6 +29,27 @@ def parse_config_file(file_path):
     config.read(file_path)
     print(config.sections())
 
+_TRUE_VALUES = {"true", "yes", "on", "1"}
+_FALSE_VALUES = {"false", "no", "off", "0"}
+
+def coerce_bool(key, value):
+    """Read a config-file value as a boolean.
+
+    Config values arrive as strings, so an uncoerced `headless = false` would be
+    the truthy string "false" and silently turn the option ON. An unrecognised
+    value raises rather than falling back to truthiness: a service refusing to
+    start beats a vehicle running in a mode nobody asked for.
+    """
+    normalized = value.strip().lower()
+    if normalized in _TRUE_VALUES:
+        return True
+    if normalized in _FALSE_VALUES:
+        return False
+    raise ValueError(
+        f"Invalid boolean for '{key}': {value!r}. Use one of "
+        f"{sorted(_TRUE_VALUES)} or {sorted(_FALSE_VALUES)}."
+    )
+
 def parse_args(raw_args=None):
     parser = argparse.ArgumentParser(description="Welcome to the UAV Runner, this script runs an API that interfaces with Ardupilots instances (real or simulated).")
     parse_mode(parser)
@@ -49,9 +70,18 @@ def parse_args(raw_args=None):
         for section in config.sections():
             for key, value in config.items(section):
                 if hasattr(args, key):
-                    if value[0] == "[":
-                        value = value.strip("[]").split(",")
-                        value = [v.strip() for v in value]
+                    # An argument whose parsed default is a bool is a boolean
+                    # argument -- no hardcoded list of names to keep in step.
+                    # This runs after the `[simulated]` rule above, so an
+                    # explicit `simulated = false` key overrides it.
+                    if isinstance(getattr(args, key), bool):
+                        value = coerce_bool(key, value)
+                    elif value.startswith("["):
+                        # Drop empty entries: "[]".strip("[]") is "", and
+                        # "".split(",") is [""] -- never an empty list. Without
+                        # this filter, `gs_connection=[]` yields [""], which
+                        # becomes a dangling `--out ` in the SITL command line.
+                        value = [v.strip() for v in value.strip("[]").split(",") if v.strip()]
                     setattr(args, key, value)
                 else:
                     print(f"Warning: {key} not found in args")
@@ -172,6 +202,15 @@ def parse_simulated(simulated_parser):
         dest='ardupilot_path',
         default=None,
         help="Path for ardupilot repository. If omitted, sim_vehicle.py is resolved from the PATH environment variable."
+    )
+
+    simulated_parser.add_argument(
+        '--headless',
+        dest='headless',
+        action='store_true',
+        default=False,
+        help="Run SITL without opening any terminal window, for hosts with no X server. "
+             "SITL output goes to ~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log"
     )
 
 def parse_logs(logs_parser):

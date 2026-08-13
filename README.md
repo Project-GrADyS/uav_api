@@ -15,13 +15,16 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
 
 ## Table of Contents
 
+- [Documentation](#documentation)
 - [Installation](#installation)
   - [Prerequisites](#prerequisites)
   - [Installing from PyPI (recommended)](#installing-from-pypi-recommended)
   - [Installing from source (development)](#installing-from-source-development)
 - [Getting Started](#getting-started)
   - [Running with a real drone](#running-with-a-real-drone)
+  - [Deploying on hardware](#deploying-on-hardware)
   - [Running in simulation (SITL)](#running-in-simulation-sitl)
+    - [Running headless](#running-headless)
     - [Locating ArduPilot (`--ardupilot_path`)](#locating-ardupilot---ardupilot_path)
     - [Registering ArduPilot in PATH](#registering-ardupilot-in-path)
   - [Vehicle Types](#vehicle-types)
@@ -59,15 +62,30 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
 
 ---
 
+# Documentation
+
+This README covers installation, running the API, the CLI reference and the
+example clients. Reference material lives under [`docs/`](docs/):
+
+| Document | Contents |
+|----------|----------|
+| [`docs/api-specification.md`](docs/api-specification.md) | **The HTTP contract.** Every endpoint's path, query/body schema and response shape. This is what the GrADyS ecosystem codes against — update it before changing an endpoint. |
+| [`docs/coordinate-frames.md`](docs/coordinate-frames.md) | GPS vs NED vs NED-velocity, why `z` is negative for altitude, and common MAVLink pitfalls. Read before writing movement logic. |
+| [`docs/plane-support.md`](docs/plane-support.md) | Plane (beta) endpoint reference and how its behaviour differs from copter. |
+| [`docs/deployment.md`](docs/deployment.md) | Running the API as a systemd service on a companion computer, and fleet provisioning. |
+
+---
+
 # Installation
 
 ## Prerequisites
 
-- Python 3.8+
-- For simulated flights: ArduPilot repository built locally, and `xterm` installed.
+- Python 3.10+
+- For simulated flights: ArduPilot repository built locally, and `xterm` installed — unless you pass [`--headless`](#running-headless), which needs no X server at all.
   - Clone and build ArduPilot: https://ardupilot.org/dev/docs/where-to-get-the-code.html
   - SITL setup guide: https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
   - ArduPilot's `Tools/autotest` directory should be on your `PATH` so `sim_vehicle.py` can be found — see [Registering ArduPilot in PATH](#registering-ardupilot-in-path). Otherwise, point the API at the repository with `--ardupilot_path`.
+- For [mission scripts](#mission-script-management): `tmux` installed. This applies on real drones too — each script runs in its own tmux session, in simulation and on hardware alike.
 
 ## Installing from PyPI (recommended)
 
@@ -104,15 +122,78 @@ The `--connection_type` controls the UDP direction:
 - `udpout` — API connects out to the drone
 - `usb` — serial connection (set `--uav_connection` to the serial device path, e.g. `/dev/ttyUSB0`)
 
+## Deploying on hardware
+
+The command above is for bringing a vehicle up by hand. For a companion
+computer that should start the API automatically on boot, install it as a
+systemd service — reference unit and config are in
+[`packaging/`](packaging/):
+
+- [`packaging/systemd/uav-api.service`](packaging/systemd/uav-api.service)
+- [`packaging/uav-api.ini.example`](packaging/uav-api.ini.example)
+
+Substitute the `__USER__` / `__VENV__` / `__CONFIG__` / `__HOME__` placeholders in
+the unit, then:
+
+```bash
+sudo install -m 0644 packaging/systemd/uav-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now uav-api
+journalctl -u uav-api -f
+```
+
+The API creates its own working directories on startup — `scripts_path`,
+`script_logs`, and the parent of `log_path` — so the deployment only has to make
+sure the service user can write to them.
+
+For a fleet of drones, use
+[**gradys-fleet**](https://github.com/Project-GrADyS/gradys-fleet), which
+provisions companion computers from a blank image and manages every vehicle's
+identity, configuration and services from a single inventory. It also handles
+`gradys-embedded`, pre-flight verification and post-flight data collection. It
+renders the two files above per drone, so keep the copies in `packaging/` in step
+with the templates there.
+
+> `scripts/install_service.sh` is deprecated. It assumes a machine that was
+> already prepared by hand and is single-drone by construction.
+
+See [`docs/deployment.md`](docs/deployment.md) for the full guide — configuration
+notes, why the unit is written the way it is, and troubleshooting.
+
 ## Running in simulation (SITL)
 
-This starts both ArduCopter SITL (in a new `xterm` window) and the API:
+This starts both ArduCopter SITL (in a new `xterm` window) and the API — see [Running headless](#running-headless) for the no-window variant:
 
 ```bash
 uav-api --simulated true --speedup 1 --port 8000 --sysid 1
 ```
 
 SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`). The `--speedup` factor controls simulation speed (e.g. `5` = 5× real time). The `--location` argument sets the SITL home position (default `AbraDF`).
+
+### Running headless
+
+`--headless` runs the same simulation without opening any window, so it works on a machine with no X server — CI, a remote box, or over SSH:
+
+```bash
+uav-api --simulated true --headless --speedup 1 --port 8000 --sysid 1
+```
+
+This does three things, and all three are required:
+
+1. uav_api stops wrapping `sim_vehicle.py` in `xterm`.
+2. It removes `DISPLAY` (along with `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ`) from the environment it hands to SITL. ArduPilot's `run_in_terminal_window.sh` launches the vehicle binary in whatever terminal those variables point at, and only runs it in the background when none are set — without the scrub you would still get a window on a desktop.
+3. It passes `--mavproxy-args=--daemon`, so MAVProxy starts without an interactive shell. This one is not cosmetic: MAVProxy treats EOF on stdin as a request to quit, and `sim_vehicle.py` exits when MAVProxy does, so a headless SITL without it dies within milliseconds of starting.
+
+A consequence of (3): there is no `MAV>` prompt to type commands into. In headless mode the log file below is your only view into SITL.
+
+Since there is no terminal to read, output is written to files instead:
+
+| Output | Location |
+|--------|----------|
+| `sim_vehicle.py` and MAVProxy | `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` |
+| The vehicle binary (`ArduCopter`/`ArduPlane`) | `/tmp/<vehicle>.log`, chosen by ArduPilot |
+
+> The vehicle binary's path is ArduPilot's choice, not uav_api's, and it does not include the sysid — several headless instances on one host will write over each other there. The per-sysid `sitl_<sysid>.log` is unaffected.
 
 ### Locating ArduPilot (`--ardupilot_path`)
 
@@ -164,7 +245,7 @@ The API supports two ArduPilot vehicles, selected at startup with `--vehicle`:
 | ArduCopter (QuadCopter) | `--vehicle copter` *(default)* | Stable — full router surface, integration tests pass. |
 | ArduPlane / QuadPlane | `--vehicle plane` | **Beta** |
 
-> ⚠️ **Beta**: Plane support is in beta — some functionalities may not work as intended. The plane endpoint surface is intentionally smaller than copter (no `/mission/*`, no `/peripherical/*`, fewer movement endpoints) and there are no integration tests yet. Treat as preview. Full details in [`.claude/docs/plane-support.md`](.claude/docs/plane-support.md).
+> ⚠️ **Beta**: Plane support is in beta — some functionalities may not work as intended. The plane endpoint surface is intentionally smaller than copter (no `/mission/*`, no `/peripherical/*`, fewer movement endpoints) and there are no integration tests yet. Treat as preview. Full details in [`docs/plane-support.md`](docs/plane-support.md).
 
 **Run as plane in simulation:**
 
@@ -210,14 +291,10 @@ sysid=1
 [simulated]
 ardupilot_path=~/ardupilot
 location=AbraDF
-gs_connection=[]
 speedup=1
 
 [logs]
-log_console=[]
-log_path=None
-debug=[]
-script_logs=None
+log_console=[VEHICLE, UVICORN]
 ```
 
 Run with:
@@ -226,9 +303,17 @@ Run with:
 uav-api --config /path/to/config.ini
 ```
 
-CLI arguments always override values from the config file. Example config files for single and multi-UAV setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`.
+**Values in the config file override CLI arguments.** The file is read after the command line is parsed, and every key it contains is written over the parsed value — so `uav-api --config drone.ini --port 9000` still listens on the port set in the file.
 
-> `ardupilot_path` is optional here too — drop the key to resolve `sim_vehicle.py` from `PATH`. The mere presence of a `[simulated]` section turns simulated mode on.
+Only write the keys you actually want to change; omitting a key gives you its default. In particular, do **not** write `None` as a value: INI values are read as strings, so `log_path = None` produces a log file literally named `None` rather than the default path.
+
+Boolean keys (`simulated`, `udp`, `headless`) accept `true`/`false`, `yes`/`no`, `on`/`off` or `1`/`0`, in any case. Anything else is rejected at startup rather than guessed at.
+
+Example config files for single and multi-UAV simulated setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`. For a real drone, start from [`packaging/uav-api.ini.example`](packaging/uav-api.ini.example).
+
+> `ardupilot_path` is optional here too — drop the key to resolve `sim_vehicle.py` from `PATH`.
+
+> **The mere presence of a `[simulated]` section turns simulated mode on**, whatever the section contains. An explicit `simulated = false` key overrides that, since keys are applied after the section is detected — but a real-drone config is clearest with no `[simulated]` section at all.
 
 ## Spawning programmatically
 
@@ -283,7 +368,7 @@ A successful response confirms the API is connected to the vehicle:
 
 # CLI Arguments Reference
 
-All arguments can be passed on the command line or set in an INI config file. Run `uav-api --help` for a quick reference.
+All arguments can be passed on the command line or set in an INI config file. Run `uav-api --help` for a quick reference. Note that when both are used, [values in the config file win](#using-a-configuration-file).
 
 ## General (all modes)
 
@@ -295,7 +380,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | `--sysid` | 10 | MAVLink system ID; must match the drone's `SYSID_THISMAV` parameter |
 | `--uav_connection` | `127.0.0.1:17171` | MAVLink address — `host:port` for UDP, or serial device path for USB |
 | `--gradys_gs` | None | `host:port` of Gradys Ground Station — enables periodic GPS location push |
-| `--scripts_path` | `~/uav_scripts` | Directory where uploaded scripts are saved and executed from (copter mode) |
+| `--scripts_path` | `~/uav_scripts` | Directory where uploaded scripts are saved and executed from (copter mode). Created at startup if missing. |
 | `--python_path` | `python3` | Python binary used to run uploaded `.py` scripts |
 
 ## Connection (real drone)
@@ -313,15 +398,18 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`) |
 | `--speedup` | 1 | SITL simulation time multiplier |
 | `--gs_connection` | `[]` | Extra `host:port` addresses SITL streams telemetry to (e.g. Mission Planner) |
+| `--headless` | `false` | Run SITL without opening any terminal window; requires no X server. Output goes to `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log`. See [Running headless](#running-headless). |
 
 ## Logging
 
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--log_console` | `[]` | Components to print logs to console: `VEHICLE` `UVICORN` `GRADYS_GS` `SCRIPT`. `VEHICLE` is vehicle-agnostic — see [Logging in different vehicles](#logging-in-different-vehicles) for the prefix actually printed. |
-| `--log_path` | None | File path to write all component logs combined |
+| `--log_path` | `~/uav_api_logs/uav_logs/uav_<sysid>.log` | File path to write all component logs combined. Its parent directory is created at startup. |
 | `--debug` | `[]` | Same component names as `--log_console` but at DEBUG verbosity |
-| `--script_logs` | None | Directory where script stdout/stderr are saved as timestamped `.log` files |
+| `--script_logs` | `~/uav_api_logs/script_logs` | Directory where script stdout/stderr are saved as timestamped `.log` files. Created at startup if missing. |
+
+> The API creates the directories it needs at startup — `scripts_path`, `script_logs`, and the parent of `log_path` — whether the path came from the default or from a config file, expanding `~` along the way. Nothing has to pre-create them for it.
 
 ## UDP/QUIC mode
 
@@ -536,7 +624,7 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | `uav_api/routers/router_dependencies.py` | Lazy singletons `get_copter_instance` / `get_plane_instance` + `args` via `Depends()` |
 | `uav_api/gradys_gs.py` | Async coroutine that POSTs GPS location to Gradys GS every second |
 | `uav_api/log.py` | Logger configuration; routes `VEHICLE` token to `COPTER`/`PLANE` logger based on `--vehicle` |
-| `uav_api/setup.py` | Idempotent home-directory setup (log dirs, scripts dir, ArduPilot config) |
+| `uav_api/setup.py` | Idempotent startup setup — creates the scripts, script-log and log directories (defaulted or configured) plus the ArduPilot locations file |
 | `uav_api/routers/copter_command.py` | Copter endpoints: arm, takeoff, land, RTL, speed, home |
 | `uav_api/routers/copter_movement.py` | Copter endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
 | `uav_api/routers/copter_telemetry.py` | Copter endpoints: GPS, NED, compass, battery, sensor status, home info |
@@ -550,6 +638,9 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | `uav_api/classes/attitude.py` | Pydantic model: `Attitude_target` (used internally by `Plane.set_attitude()`) |
 | `uav_api/classes/script.py` | Pydantic model: `Script` |
 | `flight_examples/` | Example client scripts and INI config files (Copter) |
+| `packaging/systemd/uav-api.service` | Canonical systemd unit for running the API on a companion computer |
+| `packaging/uav-api.ini.example` | Canonical real-drone INI config example |
+| `scripts/install_service.sh` | Deprecated single-drone installer — see [Deploying on hardware](#deploying-on-hardware) |
 
 ## Processes and Coroutines
 

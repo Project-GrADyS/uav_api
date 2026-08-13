@@ -1,4 +1,25 @@
 #!/bin/bash
+#
+# DEPRECATED -- kept for single-drone bring-up and backwards compatibility.
+#
+# This script assumes a companion computer that was already prepared by hand:
+# it does not create /home/pi/.venv, does not install the uav-api package, does
+# not install any OS packages (tmux is required even on a real drone), and does
+# not create /home/pi/uav_scripts. It is also single-drone by construction and
+# hardcodes the user `pi`.
+#
+# For fleet deployment use gradys-fleet, which provisions a companion computer
+# from a blank image and manages the whole swarm from one inventory:
+#
+#     https://github.com/Project-GrADyS/gradys-fleet
+#
+# The canonical unit and config templates now live in this repo under
+# packaging/ -- see packaging/systemd/uav-api.service and
+# packaging/uav-api.ini.example.
+#
+# Note this script writes port = 8000 + sysid. That offset exists only for SITL,
+# where several vehicles share one host; on real hardware each vehicle is its
+# own host and the port is fixed at 8000.
 
 # Ensure script is run with root privileges
 if [ "$EUID" -ne 0 ]; then

@@ -6,8 +6,11 @@ test files.  Arms and takes off before yielding to tests, then tears down.
 
 Requirements:
     - ArduPilot installed (default ~/ardupilot)
-    - xterm available on PATH
     - pytest, requests
+
+The fixture runs SITL with --headless, so no X server or xterm is needed and no
+windows appear during a test run. SITL output goes to
+~/uav_api_logs/ardupilot_logs/sitl_1.log if you need to see why it failed.
 """
 
 import time
@@ -70,6 +73,7 @@ def api_server():
     """Start the API server with SITL, arm, take off, yield, then tear down."""
     proc = spawn_with_args([
         "--simulated", "true",
+        "--headless",
         "--ardupilot_path", "~/ardupilot",
         "--speedup", str(SPEEDUP),
         "--port", "8001",
