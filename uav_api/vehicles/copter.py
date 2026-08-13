@@ -1,3 +1,4 @@
+import collections
 import copy
 import math
 import os
@@ -123,6 +124,11 @@ class Copter:
         self.last_heartbeat_time_ms = None
         self.last_heartbeat_time_wc_s = 0
         self.in_drain_mav = False
+        # COMMAND_ACKs are single-shot: whichever reader pulls one off the
+        # socket consumes it for everyone else. message_hook captures them
+        # here so run_cmd_get_ack finds its ack no matter which thread
+        # (drain loop, another handler) parsed the packet.
+        self.ack_deque = collections.deque(maxlen=64)
         self.total_waiting_to_arm_time = 0
         self.waiting_to_arm_count = 0
         self.wploader = mavwp.MAVWPLoader()
@@ -452,6 +458,8 @@ class Copter:
         Send the heartbeats if needed."""
         if msg.get_type() == 'STATUSTEXT':
             self.progress("AP: %s" % msg.text)
+        if msg.get_type() == 'COMMAND_ACK':
+            self.ack_deque.append((time.monotonic(), msg))
         self.idle_hook(mav)
         self.do_heartbeats()
 
@@ -547,8 +555,11 @@ class Copter:
                 target_compid=None,
                 timeout=10,
                 quiet=False):
-        self.drain_mav_unparsed()
-        time.time()  # required for timeout in run_cmd_get_ack to work
+        # Parsed drain, not drain_mav_unparsed: unparsed discards raw bytes
+        # without firing message hooks, which would destroy another handler's
+        # in-flight COMMAND_ACK unrecoverably.
+        self.drain_mav()
+        t_sent = time.monotonic()
         self.send_cmd(command,
                       p1,
                       p2,
@@ -560,29 +571,32 @@ class Copter:
                       target_sysid=target_sysid,
                       target_compid=target_compid,
                       )
-        self.run_cmd_get_ack(command, want_result, timeout, quiet=quiet)
+        self.run_cmd_get_ack(command, want_result, timeout, quiet=quiet, sent_after=t_sent)
 
-    def run_cmd_get_ack(self, command, want_result, timeout, quiet=False):
-        # note that the caller should ensure that this cached
-        # timestamp is reasonably up-to-date!
-        tstart = time.time()
+    def run_cmd_get_ack(self, command, want_result, timeout, quiet=False, sent_after=None):
+        # Waits on ack_deque (fed by message_hook) instead of recv_match:
+        # the ack reaches us no matter which thread parsed the packet. The
+        # non-blocking recv_match keeps this self-sufficient when nothing
+        # else is pumping the connection.
+        if sent_after is None:
+            sent_after = time.monotonic()
+        tstart = time.monotonic()
         while True:
-            delta_time = time.time() - tstart
+            delta_time = time.monotonic() - tstart
             if delta_time > timeout:
                 raise TimeoutException("Did not get good COMMAND_ACK within %fs" % timeout)
-            m = self.mav.recv_match(type='COMMAND_ACK',
-                                    blocking=True,
-                                    timeout=0.1)
-            if m is None:
-                continue
-            if not quiet:
-                self.progress("ACK received: %s (%fs)" % (str(m), delta_time))
-            if m.command == command:
+            self.mav.recv_match(blocking=False)
+            for ts, m in list(self.ack_deque):
+                if ts < sent_after or m.command != command:
+                    continue
+                if not quiet:
+                    self.progress("ACK received: %s (%fs)" % (str(m), delta_time))
                 if m.result != want_result:
                     raise ValueError("Expected %s got %s" % (
                         mavutil.mavlink.enums["MAV_RESULT"][want_result].name,
                         mavutil.mavlink.enums["MAV_RESULT"][m.result].name))
-                break
+                return
+            time.sleep(0.05)
 
     def run_cmd_do_set_mode(self,
                             mode,
@@ -1006,7 +1020,7 @@ Also, ignores heartbeats not from our target system"""
 
     def wait_ekf_flags(self, required_value, error_bits, timeout=30):
         self.progress("Waiting for EKF value %u" % required_value)
-        self.drain_mav_unparsed()
+        self.drain_mav()
         last_print_time = 0
         tstart = time.time()
         while timeout is None or time.time() < tstart + timeout:
@@ -1419,7 +1433,7 @@ Also, ignores heartbeats not from our target system"""
     def disarm_vehicle(self, timeout=60, force=False):
         """Disarm vehicle with mavlink disarm message."""
         self.progress("Disarm motors with MAVLink cmd")
-        self.drain_mav_unparsed()
+        self.drain_mav()
         p2 = 0
         if force:
             p2 = 21196  # magic force disarm value
@@ -1676,7 +1690,7 @@ Also, ignores heartbeats not from our target system"""
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
                                                             mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
-                                                            mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE if look_at_target else 0,
+                                                            (mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE if look_at_target else 0),
                                                             float(north), # north offset to origin(home) (m)
                                                             float(east), # east offset to origin(home) (m)
                                                             float(down), # down offset to origin(home) (m)
@@ -1749,34 +1763,6 @@ Also, ignores heartbeats not from our target system"""
                         target_compid=self.target_component
                     )
         
-    def stop(self):
-        self.run_cmd(
-                        mavutil.mavlink.MAV_CMD_DO_PAUSE_CONTINUE, # command
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        target_sysid=self.target_system,
-                        target_compid=self.target_component
-                    )
-        
-    def resume(self):
-        self.run_cmd(
-                        mavutil.mavlink.MAV_CMD_DO_PAUSE_CONTINUE, # command
-                        1,
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        target_sysid=self.target_system,
-                        target_compid=self.target_component
-                    )
-
     def get_message(self, msg_type, timeout=10):
         """Get most recent message sent by copter.
         """
@@ -1866,6 +1852,10 @@ Also, ignores heartbeats not from our target system"""
         return info_msg
 
     def get_compass_info(self, timeout=5):
+        # MAG_CAL_REPORT is only emitted during a compass calibration, so it
+        # is normally absent (always, in SITL).
+        if "MAG_CAL_REPORT" not in self.mav.messages:
+            return None
         compass_msg = self.get_last_message("MAG_CAL_REPORT")
         return compass_msg
     

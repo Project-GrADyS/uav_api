@@ -107,6 +107,11 @@ def ned_info(uav: Copter = Depends(get_copter_instance), args: Namespace = Depen
 def compass_info(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         info = uav.get_compass_info()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GET_COMPASS_INFO FAIL: {e}")
+    if info is None:
+        raise HTTPException(status_code=404, detail="No compass calibration report received (MAG_CAL_REPORT is only emitted during a compass calibration)")
+    try:
         res_obj = {
             "device": "uav",
             "id": str(args.sysid),

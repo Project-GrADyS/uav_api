@@ -33,6 +33,18 @@ def takeoff(alt: int = 15, uav: Copter = Depends(get_copter_instance), args: Nam
         raise HTTPException(status_code=500, detail=f"TAKEOFFF_COMMAND FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Takeoff successful! Vehicle at {alt} meters"}
 
+@copter_command_router.get("/brake", tags=["command"], summary="Stops the copter immediately (BRAKE mode)")
+def brake(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
+    if not uav.change_mode("BRAKE"):
+        raise HTTPException(status_code=500, detail="BRAKE_COMMAND FAIL: could not switch to BRAKE mode")
+    return {"device": "uav", "id": str(args.sysid), "result": "Copter braking. Use /command/guided to enable movement commands again"}
+
+@copter_command_router.get("/guided", tags=["command"], summary="Switches to GUIDED mode, enabling movement commands")
+def guided(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
+    if not uav.change_mode("GUIDED"):
+        raise HTTPException(status_code=500, detail="GUIDED_COMMAND FAIL: could not switch to GUIDED mode")
+    return {"device": "uav", "id": str(args.sysid), "result": "Copter in GUIDED mode"}
+
 @copter_command_router.get("/land", tags=["command"])
 def land(timeout=60, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:

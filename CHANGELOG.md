@@ -5,6 +5,64 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-08-13
+
+### Added
+- `--headless` flag: SITL runs without spawning terminal windows (no xterm or X
+  server required), with MAVProxy kept alive via `--daemon`.
+- Canonical systemd unit and config example under `packaging/`, plus a
+  deployment guide (`docs/deployment.md`) for running uav_api as a Linux
+  service and provisioning fleets with gradys-fleet.
+- `ready_to_arm`, `ground_speed`, `air_speed`, `heading` and battery
+  information in the gradys_gs task data.
+- Reference documentation published under `docs/`: HTTP API specification,
+  coordinate frames, and plane support.
+- This changelog.
+
+### Changed
+- **BREAKING:** `GET /movement/stop` and `GET /movement/resume` (copter) were
+  replaced by `GET /command/brake` (BRAKE mode: immediate halt + position
+  hold) and `GET /command/guided` (return to GUIDED, re-enabling movement
+  commands). The old MAVLink pause left the vehicle silently ignoring every
+  subsequent movement command until an explicit resume.
+- **BREAKING (gradys_gs):** the `battery_voltage` field was removed from the
+  gradys_gs task data in favor of `ready_to_arm`.
+- Integration tests now boot a fresh SITL per test file (unique port/sysid)
+  instead of sharing one session-scoped instance, eliminating cross-test
+  state leaks.
+- `POST /movement/travel_at_ned` documentation now states that the velocity
+  setpoint is sent once and ArduPilot stops the vehicle after `GUID_TIMEOUT`
+  (3 s) unless the caller re-sends it periodically.
+- `--ardupilot_path` is now optional: by default `sim_vehicle.py` is resolved
+  from the PATH environment variable instead of requiring an explicit
+  ArduPilot checkout path.
+- Declared Python floor raised to 3.10.
+- Config-file precedence and startup directory creation are now documented.
+
+### Fixed
+- `POST /movement/drive` sent a zeroed typemask when `look_at_target` was
+  false (operator-precedence bug), commanding position, velocity and
+  acceleration simultaneously.
+- `COMMAND_ACK` messages could be consumed by a concurrent reader of the
+  MAVLink connection (background drain loop or another request handler),
+  making ack-waiting endpoints hang and fail intermittently. Acks are now
+  captured by a message hook and matched by command id and timestamp.
+- `GET /telemetry/compass` returned a 500 (`KeyError`) when no compass
+  calibration ever ran; it now returns 404 with an explanatory detail.
+- Boolean values in config files are coerced correctly.
+- Empty list values in config files are parsed correctly.
+- uav_api creates its own directories regardless of how the paths are
+  configured.
+- gradys_gs battery fields reported incorrect values.
+
+### Deprecated
+- `scripts/install_service.sh`, superseded by the `packaging/` systemd unit
+  and gradys-fleet.
+
+### Removed
+- License declaration removed from `pyproject.toml`.
+- `.claude/` context files removed from version control.
+
 ## [0.2.1] - 2026-06-06
 
 ### Added
@@ -113,6 +171,7 @@ Initial public release (renamed from `uav_control`). Copter GUIDED control over
 HTTP, ArduPilot SITL support, `sim_speedup` control, `take_picture`, Swagger
 docs, INI config, and initial flight examples.
 
+[0.2.2]: https://github.com/Project-GrADyS/uav_api/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Project-GrADyS/uav_api/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Project-GrADyS/uav_api/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/Project-GrADyS/uav_api/compare/v0.1.2...v0.1.3

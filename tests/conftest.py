@@ -1,50 +1,77 @@
 """
 Shared fixtures and helpers for integration tests.
 
-Spawns a single SITL-backed API server (session-scoped) shared across all
-test files.  Arms and takes off before yielding to tests, then tears down.
+Each test module gets its OWN SITL-backed API server (module-scoped fixture,
+built with make_api_fixture) on a unique port/sysid, so state can't leak
+between modules and destructive tests (land, RTL, set_home) can't poison
+other files. Modules must run sequentially: every SITL instance shares the
+same working directory (~/uav_api_logs/ardupilot_logs).
+
+Port/sysid allocation:
+    command_test      8001 / 1
+    mission_test      8002 / 2
+    movement_test     8003 / 3
+    peripherical_test 8004 / 4
+    telemetry_test    8005 / 5
 
 Requirements:
-    - ArduPilot installed (default ~/ardupilot)
-    - pytest, requests
+    - ArduPilot installed with sim_vehicle.py on PATH (or pass --ardupilot_path)
+    - pytest, requests, psutil
 
-The fixture runs SITL with --headless, so no X server or xterm is needed and no
-windows appear during a test run. SITL output goes to
-~/uav_api_logs/ardupilot_logs/sitl_1.log if you need to see why it failed.
+SITL runs with --headless, so no X server or xterm is needed. SITL output
+goes to ~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log if you need to see
+why it failed; the API log is ~/uav_api_logs/uav_logs/uav_<sysid>.log.
 """
 
+import os
 import time
+import psutil
 import pytest
 import requests
 
 from uav_api.run_api import spawn_with_args
 
-BASE_URL = "http://localhost:8001"
 SPEEDUP = 5
+ARDUPILOT_LOGS = os.path.expanduser("~/uav_api_logs/ardupilot_logs")
 
 
-# ── HTTP helpers ──────────────────────────────────────────────────────────────
+# ── HTTP client ───────────────────────────────────────────────────────────────
 
-def get(path, **kwargs):
-    return requests.get(f"{BASE_URL}{path}", timeout=10, **kwargs)
+class Client:
+    """HTTP helpers bound to one API instance.
 
+    Blocking endpoints (arm, takeoff, land, rtl, *_wait) must pass a timeout
+    LARGER than the endpoint's internal timeout: if the client gives up first,
+    the abandoned handler keeps running and races every later request on the
+    shared MAVLink link.
+    """
 
-def post(path, json=None, **kwargs):
-    return requests.post(f"{BASE_URL}{path}", json=json, timeout=10, **kwargs)
+    def __init__(self, port):
+        self.base_url = f"http://localhost:{port}"
 
+    def get(self, path, timeout=10, **kwargs):
+        return requests.get(f"{self.base_url}{path}", timeout=timeout, **kwargs)
 
-def delete(path, **kwargs):
-    return requests.delete(f"{BASE_URL}{path}", timeout=10, **kwargs)
+    def post(self, path, json=None, timeout=10, **kwargs):
+        return requests.post(f"{self.base_url}{path}", json=json, timeout=timeout, **kwargs)
+
+    def delete(self, path, timeout=10, **kwargs):
+        return requests.delete(f"{self.base_url}{path}", timeout=timeout, **kwargs)
 
 
 # ── wait helpers ──────────────────────────────────────────────────────────────
 
-def wait_for_api(timeout=90):
-    """Poll /telemetry/general until the server is up."""
+def wait_for_api(client, proc, timeout=90):
+    """Poll /telemetry/general until the server is up; fail fast if it died."""
     deadline = time.time() + timeout
     while time.time() < deadline:
+        if not proc.is_alive():
+            raise RuntimeError(
+                "API server process died during startup — see "
+                "~/uav_api_logs/uav_logs and ~/uav_api_logs/ardupilot_logs"
+            )
         try:
-            r = get("/telemetry/general")
+            r = client.get("/telemetry/general")
             if r.status_code == 200:
                 return
         except requests.ConnectionError:
@@ -53,11 +80,11 @@ def wait_for_api(timeout=90):
     raise TimeoutError("API did not become ready within timeout")
 
 
-def wait_for_altitude(target_alt, tolerance=2, timeout=30):
+def wait_for_altitude(client, target_alt, tolerance=2, timeout=60):
     """Wait until NED altitude (negative-down) stabilises near target."""
     deadline = time.time() + timeout
     while time.time() < deadline:
-        r = get("/telemetry/ned")
+        r = client.get("/telemetry/ned")
         if r.status_code == 200:
             z = r.json()["info"]["position"]["z"]
             if abs(z - (-target_alt)) < tolerance:
@@ -66,39 +93,70 @@ def wait_for_altitude(target_alt, tolerance=2, timeout=30):
     raise TimeoutError(f"Altitude did not reach {target_alt}m within {timeout}s")
 
 
-# ── session-scoped fixture: one SITL server for all tests ────────────────────
+# ── SITL/API lifecycle ────────────────────────────────────────────────────────
 
-@pytest.fixture(scope="session", autouse=True)
-def api_server():
-    """Start the API server with SITL, arm, take off, yield, then tear down."""
+def _kill_stray_sitl(sysid):
+    """Kill SITL processes left over by a SIGKILLed server (lifespan teardown
+    never ran, so they survive holding the SITL TCP ports)."""
+    tag = f"SITL_ID_{sysid}"
+    for proc in psutil.process_iter(["environ"]):
+        try:
+            env = proc.info["environ"]
+            if env and env.get("UAV_SITL_TAG") == tag:
+                proc.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+
+def start_api(port, sysid, flying=False):
+    _kill_stray_sitl(sysid)
+    # Parameters written by a previous run (e.g. SIM_SPEEDUP) persist in the
+    # shared eeprom and silently override the --speedup we pass.
+    eeprom = os.path.join(ARDUPILOT_LOGS, "eeprom.bin")
+    if os.path.exists(eeprom):
+        os.remove(eeprom)
+
     proc = spawn_with_args([
         "--simulated", "true",
         "--headless",
-        "--ardupilot_path", "~/ardupilot",
         "--speedup", str(SPEEDUP),
-        "--port", "8001",
-        "--sysid", "1",
+        "--port", str(port),
+        "--sysid", str(sysid),
+        "--uav_connection", f"127.0.0.1:{17170 + sysid}",
     ])
-
+    client = Client(port)
     try:
-        wait_for_api(timeout=90)
+        wait_for_api(client, proc)
+        if flying:
+            r = client.get("/command/arm", timeout=60)
+            assert r.status_code == 200, f"Arm failed: {r.text}"
+            r = client.get("/command/takeoff", params={"alt": 15}, timeout=60)
+            assert r.status_code == 200, f"Takeoff failed: {r.text}"
+            wait_for_altitude(client, 15, tolerance=3)
+        return proc, client
+    except BaseException:
+        stop_api(proc, sysid)
+        raise
 
-        # Arm
-        r = get("/command/arm")
-        assert r.status_code == 200, f"Arm failed: {r.text}"
 
-        # Takeoff
-        r = get("/command/takeoff", params={"alt": 15})
-        assert r.status_code == 200, f"Takeoff failed: {r.text}"
+def stop_api(proc, sysid):
+    proc.terminate()
+    proc.join(timeout=30)
+    if proc.is_alive():
+        proc.kill()
+        proc.join(timeout=5)
+        # SIGKILL skipped the lifespan teardown; reap its SITL ourselves.
+        _kill_stray_sitl(sysid)
 
-        # Let the drone reach altitude
-        wait_for_altitude(15, tolerance=3, timeout=40)
 
-        yield proc
+def make_api_fixture(port, sysid, flying=False):
+    """Build a module-scoped fixture that yields a Client for a fresh
+    SITL-backed API server (armed and hovering at 15 m when flying=True)."""
 
-    finally:
-        proc.terminate()
-        proc.join(timeout=15)
-        if proc.is_alive():
-            proc.kill()
-            proc.join(timeout=5)
+    @pytest.fixture(scope="module")
+    def api(request):
+        proc, client = start_api(port, sysid, flying)
+        yield client
+        stop_api(proc, sysid)
+
+    return api

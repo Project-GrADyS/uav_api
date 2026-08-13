@@ -67,6 +67,8 @@ def drive_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance), args:
 
 @copter_movement_router.post("/travel_at_ned", tags=["movement"], summary="Travels at specified NED velocity")
 def travel_at_ned(vel: Local_velocity, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
+    """The velocity setpoint is sent once; ArduPilot stops the vehicle after
+    GUID_TIMEOUT (3s) unless the caller re-sends this request periodically."""
     try:
         uav.travel_at_ned(vel.vx, vel.vy, vel.vz, look_at_target=vel.look_at_target)
     except Exception as e:
@@ -89,18 +91,3 @@ def set_yaw_rate(yaw_rate: float, uav: Copter = Depends(get_copter_instance), ar
         raise HTTPException(status_code=500, detail=f"SET_YAW_RATE FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Yaw rate set to {yaw_rate} deg/s"}
 
-@copter_movement_router.get("/stop", tags=["movement"])
-def stop(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
-    try:
-        uav.stop()
-        #uav.ensure_holding()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"STOP FAIL: {e}")
-    return {"device": "uav", "id": str(args.sysid), "result": "Copter has stopped"}
-@copter_movement_router.get("/resume", tags=["movement"])
-def resume(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
-    try:
-        uav.resume()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"RESUME FAIL: {e}")
-    return {"device": "uav", "id": str(args.sysid), "result": "Copter has resumed movement"}

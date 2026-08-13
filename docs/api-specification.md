@@ -45,6 +45,26 @@ Sends a takeoff command. Blocks until the vehicle reaches the target altitude.
 
 ---
 
+### `GET /command/brake`
+Stops the copter immediately by switching to BRAKE mode (aggressive halt, then position hold). Movement endpoints are inactive while in BRAKE mode — call `/command/guided` to command movement again.
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "result": "Copter braking. Use /command/guided to enable movement commands again"}
+```
+
+---
+
+### `GET /command/guided`
+Switches the copter to GUIDED mode, enabling the `/movement` endpoints (e.g. after `/command/brake`).
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "result": "Copter in GUIDED mode"}
+```
+
+---
+
 ### `GET /command/land`
 Lands the vehicle and disarms it.
 
@@ -187,7 +207,7 @@ Same as `drive` but blocks until the vehicle reaches the computed target positio
 ---
 
 ### `POST /movement/travel_at_ned`
-Sets the vehicle's velocity in NED frame. Non-blocking — the vehicle continues at the specified velocity until stopped.
+Sets the vehicle's velocity in NED frame. Non-blocking. The setpoint is sent **once**: ArduPilot stops the vehicle after `GUID_TIMEOUT` (3 s of sim time by default) if no fresh velocity setpoint arrives, so callers that want sustained travel must re-send this request periodically (faster than every 3 s).
 
 **Request body:**
 ```json
@@ -228,26 +248,6 @@ Spins the vehicle continuously at the specified angular speed. Positive values r
 **Response:**
 ```json
 {"device": "uav", "id": "1", "result": "Yaw rate set to 30.0 deg/s"}
-```
-
----
-
-### `GET /movement/stop`
-Stops the vehicle in place (holds current position).
-
-**Response:**
-```json
-{"device": "uav", "id": "1", "result": "Copter has stopped"}
-```
-
----
-
-### `GET /movement/resume`
-Resumes movement after a stop.
-
-**Response:**
-```json
-{"device": "uav", "id": "1", "result": "Copter has resumed movement"}
 ```
 
 ---

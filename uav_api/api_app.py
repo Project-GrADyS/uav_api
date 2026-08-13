@@ -38,7 +38,7 @@ app = FastAPI(
     title="Uav_API",
     summary=f"API designed to simplify vehicle control for Ardupilot UAVs.",
     description=description,
-    version="0.2.1",
+    version="0.2.2",
     openapi_tags=metadata,
     lifespan=lifespan
 )
