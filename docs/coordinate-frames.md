@@ -31,7 +31,12 @@ Same axes, but meters/s. Used only by `/movement/travel_at_ned`. Note the body m
 
 **xterm wrapping.** By default SITL is spawned as `xterm -e sim_vehicle.py ...` (see `start_sitl` in `lifespan.py:85`). The xterm window is the only place SITL stderr/stdout land, so if SITL fails to come up, the API will just time out on its connect retries while the xterm shows the real error. Always check the xterm window first.
 
-**Headless mode.** `--headless` drops the `xterm -e` wrapper and removes `DISPLAY`, `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ` from SITL's environment. Both halves are needed: ArduPilot's `run_in_terminal_window.sh` starts the vehicle binary in whatever terminal those variables name, and only falls back to a background process when none are set. Output moves to files — `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` for `sim_vehicle.py` and MAVProxy, and `/tmp/<vehicle>.log` (ArduPilot's choice of path, with no sysid in it) for the vehicle binary. Read those instead of an xterm when a headless SITL fails to start.
+**Headless mode.** `--headless` drops the `xterm -e` wrapper, removes `DISPLAY`, `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ` from SITL's environment, and passes `--mavproxy-args=--daemon`. All three are needed:
+
+- ArduPilot's `run_in_terminal_window.sh` starts the vehicle binary in whatever terminal those variables name, and only falls back to a background process when none are set — so the env scrub, not just the missing `xterm -e`, is what stops a window appearing.
+- MAVProxy exits as soon as its stdin reports EOF (`input_loop` in `mavproxy.py`), and `sim_vehicle.py` blocks on MAVProxy and exits with it. Headless without `--daemon` therefore dies instantly, and the API reports `SITL failed to initialize` two seconds later.
+
+Output moves to files — `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` for `sim_vehicle.py` and MAVProxy, and `/tmp/<vehicle>.log` (ArduPilot's choice of path, with no sysid in it) for the vehicle binary. Read those instead of an xterm when a headless SITL fails to start; there is no interactive `MAV>` prompt in this mode.
 
 **UAV_SITL_TAG process tracking.** The subprocess gets `UAV_SITL_TAG=SITL_ID_<sysid>` in its environment. On shutdown, `psutil` walks the process table looking for that tag and calls `kill()` on every match (xterms are stubborn; `terminate()` often does not work). If you ever see zombie SITL processes, it is because they were spawned without the tag — not the normal path.
 

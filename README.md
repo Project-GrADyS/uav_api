@@ -178,7 +178,13 @@ SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`).
 uav-api --simulated true --headless --speedup 1 --port 8000 --sysid 1
 ```
 
-This does two things: uav_api stops wrapping `sim_vehicle.py` in `xterm`, and it removes `DISPLAY` (along with `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ`) from the environment it hands to SITL. That second part matters — ArduPilot's `run_in_terminal_window.sh` launches the vehicle binary in whatever terminal those variables point at, and only runs it in the background when none are set. Without the scrub you would still get a window on a desktop.
+This does three things, and all three are required:
+
+1. uav_api stops wrapping `sim_vehicle.py` in `xterm`.
+2. It removes `DISPLAY` (along with `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ`) from the environment it hands to SITL. ArduPilot's `run_in_terminal_window.sh` launches the vehicle binary in whatever terminal those variables point at, and only runs it in the background when none are set — without the scrub you would still get a window on a desktop.
+3. It passes `--mavproxy-args=--daemon`, so MAVProxy starts without an interactive shell. This one is not cosmetic: MAVProxy treats EOF on stdin as a request to quit, and `sim_vehicle.py` exits when MAVProxy does, so a headless SITL without it dies within milliseconds of starting.
+
+A consequence of (3): there is no `MAV>` prompt to type commands into. In headless mode the log file below is your only view into SITL.
 
 Since there is no terminal to read, output is written to files instead:
 

@@ -97,7 +97,12 @@ def start_sitl(sitl_tag, args):
         ardupilot_logs = os.path.join(home_dir, "uav_api_logs", "ardupilot_logs")
         ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"
         terminal_prefix = "" if args.headless else "xterm -e "
-        sitl_command = f"{terminal_prefix}{script_path} -v {ardupilot_vehicle} -I {args.sysid} --sysid {args.sysid} -N -L {args.location} --speedup {args.speedup} {out_str} --use-dir={ardupilot_logs}"
+        # MAVProxy quits the moment its stdin reports EOF (mavproxy.py
+        # input_loop), and sim_vehicle.py blocks on MAVProxy and exits with it.
+        # With no terminal to type into there is nothing to lose by disabling
+        # the interactive shell, and everything to lose by leaving it on.
+        mavproxy_args = " --mavproxy-args=--daemon" if args.headless else ""
+        sitl_command = f"{terminal_prefix}{script_path} -v {ardupilot_vehicle} -I {args.sysid} --sysid {args.sysid} -N -L {args.location} --speedup {args.speedup} {out_str} --use-dir={ardupilot_logs}{mavproxy_args}"
 
         if not args.headless:
             sitl_process = subprocess.Popen(sitl_command.split(" "), env=env)
@@ -113,9 +118,9 @@ def start_sitl(sitl_tag, args):
             env.pop(terminal_var, None)
 
         # With no xterm to hold it, SITL output would otherwise land on the
-        # API's stdout (the journal, under systemd). stdin matters too:
-        # sim_vehicle.py runs MAVProxy in its own process rather than a new
-        # window, so MAVProxy would inherit whatever stdin the API has.
+        # API's stdout (the journal, under systemd). stdin is /dev/null so
+        # MAVProxy cannot consume the API's -- harmless now that --daemon stops
+        # it reading stdin at all.
         sitl_log = os.path.join(ardupilot_logs, f"sitl_{args.sysid}.log")
         with open(sitl_log, "w") as sitl_out:
             sitl_process = subprocess.Popen(
