@@ -1,0 +1,46 @@
+# Reference systemd unit for running uav_api on a drone's companion computer.
+#
+# This is the canonical copy. Fleet deployments render it from a template in
+# gradys-fleet (roles/uav_api/templates/uav-api.service.j2) with the paths and
+# sysid filled in per drone -- keep the two in step when changing either.
+#
+# To use directly, substitute the placeholders and install to
+# /etc/systemd/system/uav-api.service:
+#
+#   sudo install -m 0644 uav-api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now uav-api
+#
+# Placeholders: __USER__ __VENV__ __CONFIG__ __HOME__
+
+[Unit]
+Description=UAV API - ArduPilot MAVLink HTTP REST API
+Documentation=https://github.com/Project-GrADyS/uav_api
+# network.target does NOT wait for an address to be assigned. uav_api resolves
+# its own IP at startup and reports it to the ground station, so starting
+# earlier means reporting a wrong or empty address for the whole flight.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+# Not required on the udpin/mavlink-router path, but needed as soon as the
+# companion computer is wired to the flight controller over serial.
+SupplementaryGroups=dialout
+WorkingDirectory=__HOME__
+# --python_path defaults to bare `python3`. This PATH is what makes scripts
+# uploaded through /mission/upload-script run under the venv interpreter.
+Environment=PATH=__VENV__/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__VENV__/bin/uav-api --config __CONFIG__
+# If uav_api dies mid-flight the flight controller keeps executing its last
+# command, but the vehicle is uncommandable until the API returns.
+Restart=always
+RestartSec=5
+SyslogIdentifier=uav-api
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

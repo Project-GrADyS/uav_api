@@ -1,0 +1,39 @@
+; Example uav_api configuration for a REAL drone.
+;
+; Canonical example; fleet deployments render this from a template in
+; gradys-fleet (roles/uav_api/templates/uav-api.ini.j2).
+;
+; Install to /etc/gradys/uav-api.ini and pass it with:
+;     uav-api --config /etc/gradys/uav-api.ini
+;
+; IMPORTANT: a real-drone config must NOT contain a [simulated] section. The
+; mere presence of that section switches the API into simulated mode, whatever
+; its contents -- there is no `simulated = false` to turn it back off.
+;
+; NOTE: values present here take precedence over command-line arguments.
+
+[api]
+; HTTP port the API listens on. On a real drone each vehicle is its own host,
+; so this does not need to vary between vehicles.
+port = 8000
+
+; Where MAVLink arrives. With connection_type = udpin the API listens on this
+; address and something else -- typically mavlink-router or MAVProxy on the
+; companion computer -- forwards the flight controller's stream to it.
+uav_connection = 127.0.0.1:17171
+connection_type = udpin
+
+; Must match the flight controller's SYSID_THISMAV parameter. Nothing checks
+; this for you: a mismatch looks exactly like receiving no MAVLink at all.
+sysid = 1
+
+; Optional. When set, the API pushes its GPS location here once per second.
+gradys_gs = 10.0.2.5:8000
+
+; Target directory for /mission/upload-script and source for
+; /mission/execute-script. Must exist and be writable by the service user.
+scripts_path = /home/pi/uav_scripts
+
+[logs]
+log_path = /home/pi/uav_api_logs/uav_logs/uav_1.log
+script_logs = /home/pi/uav_api_logs/script_logs

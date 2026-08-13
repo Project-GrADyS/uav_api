@@ -21,6 +21,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
   - [Installing from source (development)](#installing-from-source-development)
 - [Getting Started](#getting-started)
   - [Running with a real drone](#running-with-a-real-drone)
+  - [Deploying on hardware](#deploying-on-hardware)
   - [Running in simulation (SITL)](#running-in-simulation-sitl)
     - [Locating ArduPilot (`--ardupilot_path`)](#locating-ardupilot---ardupilot_path)
     - [Registering ArduPilot in PATH](#registering-ardupilot-in-path)
@@ -68,6 +69,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
   - Clone and build ArduPilot: https://ardupilot.org/dev/docs/where-to-get-the-code.html
   - SITL setup guide: https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
   - ArduPilot's `Tools/autotest` directory should be on your `PATH` so `sim_vehicle.py` can be found — see [Registering ArduPilot in PATH](#registering-ardupilot-in-path). Otherwise, point the API at the repository with `--ardupilot_path`.
+- For [mission scripts](#mission-script-management): `tmux` installed. This applies on real drones too — each script runs in its own tmux session, in simulation and on hardware alike.
 
 ## Installing from PyPI (recommended)
 
@@ -103,6 +105,44 @@ The `--connection_type` controls the UDP direction:
 - `udpin` — API listens, drone connects to it (most common)
 - `udpout` — API connects out to the drone
 - `usb` — serial connection (set `--uav_connection` to the serial device path, e.g. `/dev/ttyUSB0`)
+
+## Deploying on hardware
+
+The command above is for bringing a vehicle up by hand. For a companion
+computer that should start the API automatically on boot, install it as a
+systemd service — reference unit and config are in
+[`packaging/`](packaging/):
+
+- [`packaging/systemd/uav-api.service`](packaging/systemd/uav-api.service)
+- [`packaging/uav-api.ini.example`](packaging/uav-api.ini.example)
+
+Substitute the `__USER__` / `__VENV__` / `__CONFIG__` / `__HOME__` placeholders in
+the unit, then:
+
+```bash
+sudo install -m 0644 packaging/systemd/uav-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now uav-api
+journalctl -u uav-api -f
+```
+
+The API creates its own working directories on startup — `scripts_path`,
+`script_logs`, and the parent of `log_path` — so the deployment only has to make
+sure the service user can write to them.
+
+For a fleet of drones, use
+[**gradys-fleet**](https://github.com/Project-GrADyS/gradys-fleet), which
+provisions companion computers from a blank image and manages every vehicle's
+identity, configuration and services from a single inventory. It also handles
+`gradys-embedded`, pre-flight verification and post-flight data collection. It
+renders the two files above per drone, so keep the copies in `packaging/` in step
+with the templates there.
+
+> `scripts/install_service.sh` is deprecated. It assumes a machine that was
+> already prepared by hand and is single-drone by construction.
+
+See [`docs/deployment.md`](docs/deployment.md) for the full guide — configuration
+notes, why the unit is written the way it is, and troubleshooting.
 
 ## Running in simulation (SITL)
 
@@ -548,6 +588,8 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | `uav_api/classes/attitude.py` | Pydantic model: `Attitude_target` (used internally by `Plane.set_attitude()`) |
 | `uav_api/classes/script.py` | Pydantic model: `Script` |
 | `flight_examples/` | Example client scripts and INI config files (Copter) |
+| `packaging/systemd/uav-api.service` | Canonical systemd unit for running the API on a companion computer |
+| `packaging/uav-api.ini.example` | Canonical real-drone INI config example |
 
 ## Processes and Coroutines
 
