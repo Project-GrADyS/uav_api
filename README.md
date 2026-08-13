@@ -63,7 +63,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
 
 ## Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - For simulated flights: ArduPilot repository built locally, and `xterm` installed.
   - Clone and build ArduPilot: https://ardupilot.org/dev/docs/where-to-get-the-code.html
   - SITL setup guide: https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
