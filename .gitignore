@@ -4,3 +4,7 @@ __pycache__/
 *.egg-info
 **.pyc
 dist
+
+# Claude Code context and skills - local only
+.claude/
+CLAUDE.md
