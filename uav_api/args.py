@@ -204,6 +204,15 @@ def parse_simulated(simulated_parser):
         help="Path for ardupilot repository. If omitted, sim_vehicle.py is resolved from the PATH environment variable."
     )
 
+    simulated_parser.add_argument(
+        '--headless',
+        dest='headless',
+        action='store_true',
+        default=False,
+        help="Run SITL without opening any terminal window, for hosts with no X server. "
+             "SITL output goes to ~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log"
+    )
+
 def parse_logs(logs_parser):
 
     # Defines which values are accepted as a LOGGER input.

@@ -29,7 +29,9 @@ Same axes, but meters/s. Used only by `/movement/travel_at_ned`. Note the body m
 
 ## SITL quirks (`--simulated true`)
 
-**xterm wrapping.** SITL is spawned as `xterm -e sim_vehicle.py ...` (see `start_sitl` in `lifespan.py:85`). The xterm window is the only place SITL stderr/stdout land, so if SITL fails to come up, the API will just time out on its connect retries while the xterm shows the real error. Always check the xterm window first.
+**xterm wrapping.** By default SITL is spawned as `xterm -e sim_vehicle.py ...` (see `start_sitl` in `lifespan.py:85`). The xterm window is the only place SITL stderr/stdout land, so if SITL fails to come up, the API will just time out on its connect retries while the xterm shows the real error. Always check the xterm window first.
+
+**Headless mode.** `--headless` drops the `xterm -e` wrapper and removes `DISPLAY`, `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ` from SITL's environment. Both halves are needed: ArduPilot's `run_in_terminal_window.sh` starts the vehicle binary in whatever terminal those variables name, and only falls back to a background process when none are set. Output moves to files — `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` for `sim_vehicle.py` and MAVProxy, and `/tmp/<vehicle>.log` (ArduPilot's choice of path, with no sysid in it) for the vehicle binary. Read those instead of an xterm when a headless SITL fails to start.
 
 **UAV_SITL_TAG process tracking.** The subprocess gets `UAV_SITL_TAG=SITL_ID_<sysid>` in its environment. On shutdown, `psutil` walks the process table looking for that tag and calls `kill()` on every match (xterms are stubborn; `terminate()` often does not work). If you ever see zombie SITL processes, it is because they were spawned without the tag — not the normal path.
 

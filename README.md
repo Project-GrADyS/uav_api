@@ -24,6 +24,7 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
   - [Running with a real drone](#running-with-a-real-drone)
   - [Deploying on hardware](#deploying-on-hardware)
   - [Running in simulation (SITL)](#running-in-simulation-sitl)
+    - [Running headless](#running-headless)
     - [Locating ArduPilot (`--ardupilot_path`)](#locating-ardupilot---ardupilot_path)
     - [Registering ArduPilot in PATH](#registering-ardupilot-in-path)
   - [Vehicle Types](#vehicle-types)
@@ -80,7 +81,7 @@ example clients. Reference material lives under [`docs/`](docs/):
 ## Prerequisites
 
 - Python 3.10+
-- For simulated flights: ArduPilot repository built locally, and `xterm` installed.
+- For simulated flights: ArduPilot repository built locally, and `xterm` installed — unless you pass [`--headless`](#running-headless), which needs no X server at all.
   - Clone and build ArduPilot: https://ardupilot.org/dev/docs/where-to-get-the-code.html
   - SITL setup guide: https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
   - ArduPilot's `Tools/autotest` directory should be on your `PATH` so `sim_vehicle.py` can be found — see [Registering ArduPilot in PATH](#registering-ardupilot-in-path). Otherwise, point the API at the repository with `--ardupilot_path`.
@@ -161,13 +162,32 @@ notes, why the unit is written the way it is, and troubleshooting.
 
 ## Running in simulation (SITL)
 
-This starts both ArduCopter SITL (in a new `xterm` window) and the API:
+This starts both ArduCopter SITL (in a new `xterm` window) and the API — see [Running headless](#running-headless) for the no-window variant:
 
 ```bash
 uav-api --simulated true --speedup 1 --port 8000 --sysid 1
 ```
 
 SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`). The `--speedup` factor controls simulation speed (e.g. `5` = 5× real time). The `--location` argument sets the SITL home position (default `AbraDF`).
+
+### Running headless
+
+`--headless` runs the same simulation without opening any window, so it works on a machine with no X server — CI, a remote box, or over SSH:
+
+```bash
+uav-api --simulated true --headless --speedup 1 --port 8000 --sysid 1
+```
+
+This does two things: uav_api stops wrapping `sim_vehicle.py` in `xterm`, and it removes `DISPLAY` (along with `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ`) from the environment it hands to SITL. That second part matters — ArduPilot's `run_in_terminal_window.sh` launches the vehicle binary in whatever terminal those variables point at, and only runs it in the background when none are set. Without the scrub you would still get a window on a desktop.
+
+Since there is no terminal to read, output is written to files instead:
+
+| Output | Location |
+|--------|----------|
+| `sim_vehicle.py` and MAVProxy | `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` |
+| The vehicle binary (`ArduCopter`/`ArduPlane`) | `/tmp/<vehicle>.log`, chosen by ArduPilot |
+
+> The vehicle binary's path is ArduPilot's choice, not uav_api's, and it does not include the sysid — several headless instances on one host will write over each other there. The per-sysid `sitl_<sysid>.log` is unaffected.
 
 ### Locating ArduPilot (`--ardupilot_path`)
 
@@ -372,6 +392,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`) |
 | `--speedup` | 1 | SITL simulation time multiplier |
 | `--gs_connection` | `[]` | Extra `host:port` addresses SITL streams telemetry to (e.g. Mission Planner) |
+| `--headless` | `false` | Run SITL without opening any terminal window; requires no X server. Output goes to `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log`. See [Running headless](#running-headless). |
 
 ## Logging
 

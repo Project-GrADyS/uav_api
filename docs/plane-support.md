@@ -50,7 +50,7 @@ For copter (default) endpoint contracts see [`api-specification.md`](api-specifi
 
 Inside `lifespan.py:lifespan`:
 
-1. **SITL spawn** (`start_sitl` in `lifespan.py:85`) — `ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`, then `xterm -e sim_vehicle.py -v {ardupilot_vehicle} -I {sysid} …`.
+1. **SITL spawn** (`start_sitl` in `lifespan.py:85`) — `ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`, then `xterm -e sim_vehicle.py -v {ardupilot_vehicle} -I {sysid} …` (the `xterm -e` prefix is dropped under `--headless`).
 2. **Singleton selection** (`lifespan.py:147-150`):
    ```python
    if args.vehicle == "plane":
