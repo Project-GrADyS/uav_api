@@ -17,7 +17,7 @@ For copter (default) endpoint contracts see [`api-specification.md`](api-specifi
 | Takeoff — VTOL (`vtol=true`) | Sends `MAV_CMD_NAV_VTOL_TAKEOFF` (QuadPlane). Not field-tested by this codebase. |
 | GUIDED goto (`POST /movement/go_to_gps[_wait]`) | Works. Uses `MAV_CMD_DO_REPOSITION`. |
 | Land (`/command/land`) | Switches to LAND mode. **Assumes a runway-aligned approach is already arranged** — naïve callers will not get a controlled landing. |
-| Land-at (`POST /movement/land_at`) | Composite: DO_REPOSITION → LAND. Same caveat as `/command/land`. |
+| Land-at (`GET /command/land_at`) | Uploads a two-item mission (home + NAV_LAND at the target, or NAV_VTOL_LAND with `vtol=true`) and switches to AUTO. Returns immediately after the mode switch; poll telemetry to track the landing. |
 | RTL (`/command/rtl`) | Plane is near home on return. **Does not wait for disarm** — fixed-wing typically loiters at home unless a landing is in the mission. |
 | Stop (`GET /movement/stop`) | Closest analog to "halt": enters LOITER. Fixed-wing can't truly stop. |
 | Telemetry (`/telemetry/general,gps,battery_info,sensor_status,error_info,home_info`) | Works. Same response envelope as copter. |
@@ -36,8 +36,8 @@ For copter (default) endpoint contracts see [`api-specification.md`](api-specifi
 |------|------|
 | `uav_api/vehicles/plane.py` | `class Plane` — MAVLink wrapper. Logger named `"PLANE"`. |
 | `uav_api/vehicles/copter.py` | `class Copter` — parallel module; no shared base class (deliberate). |
-| `uav_api/routers/plane_command.py` | `arm`, `disarm`, `takeoff`, `land`, `rtl`, `set_home`. |
-| `uav_api/routers/plane_movement.py` | `go_to_gps`, `go_to_gps_wait`, `land_at`, `stop`. |
+| `uav_api/routers/plane_command.py` | `arm`, `disarm`, `takeoff`, `land`, `land_at`, `rtl`, `set_home`. |
+| `uav_api/routers/plane_movement.py` | `go_to_gps`, `go_to_gps_wait`, `stop`. |
 | `uav_api/routers/plane_telemetry.py` | `general`, `gps`, `battery_info`, `sensor_status`, `error_info`, `home_info`. |
 | `uav_api/routers/router_dependencies.py` | `get_copter_instance` and `get_plane_instance` lazy singletons. |
 | `uav_api/classes/attitude.py` | `Attitude_target` Pydantic model (unused by routers today; reserved for future `/movement/set_attitude`). |
@@ -91,6 +91,7 @@ All endpoints share the standard envelope `{"device": "uav", "id": "<sysid>", "r
 | GET | `/command/disarm` | — | |
 | GET | `/command/takeoff` | `alt: float`, `pitch_deg: float = 15`, `vtol: bool = False` | Fixed-wing: sets `TKOFF_ALT`, enters TAKEOFF mode, waits for altitude, returns to GUIDED. VTOL: sends `MAV_CMD_NAV_VTOL_TAKEOFF`. `pitch_deg` is currently informational for fixed-wing. Default timeout 120 s. |
 | GET | `/command/land` | — | LAND mode. Requires a runway approach pre-arranged. |
+| GET | `/command/land_at` | `lat: float`, `long: float`, `alt: float = 0`, `vtol: bool = False` | Uploads a simple mission (home + `MAV_CMD_NAV_LAND`, or `MAV_CMD_NAV_VTOL_LAND` if `vtol`) and switches to AUTO. Returns immediately after the mode switch. |
 | GET | `/command/rtl` | — | Switches to RTL; returns when plane is near home (does **not** wait for disarm). |
 | GET | `/command/set_home` | — | Sets HOME to current position. |
 
@@ -100,7 +101,6 @@ All endpoints share the standard envelope `{"device": "uav", "id": "<sysid>", "r
 |--------|------|------|-------|
 | POST | `/movement/go_to_gps` | `Gps_pos` (`lat`, `long`, `alt`) | Fire-and-forget `MAV_CMD_DO_REPOSITION`. `look_at_target` field from the model is currently ignored. |
 | POST | `/movement/go_to_gps_wait` | `Gps_pos` | Same + blocks via `wait_location` (default 180 s). |
-| POST | `/movement/land_at` | `Gps_pos` | Composite: DO_REPOSITION to the target, then `change_mode("LAND")`. |
 | GET | `/movement/stop` | — | Enters LOITER at current position. |
 
 ### `/telemetry`

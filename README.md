@@ -255,8 +255,8 @@ uav-api --vehicle plane --simulated true --speedup 1 --port 8000 --sysid 1
 
 This spawns ArduPlane SITL (instead of ArduCopter) and registers only the plane routers. Consumer URLs are unchanged — `/command/arm`, `/movement/go_to_gps`, `/telemetry/gps` work the same way; the endpoint *set* is smaller. Plane mode exposes:
 
-- `/command/arm`, `/command/disarm`, `/command/takeoff?alt&pitch_deg&vtol`, `/command/land`, `/command/rtl`, `/command/set_home`
-- `POST /movement/go_to_gps`, `POST /movement/go_to_gps_wait`, `POST /movement/land_at`, `GET /movement/stop`
+- `/command/arm`, `/command/disarm`, `/command/takeoff?alt&pitch_deg&vtol`, `/command/land`, `/command/land_at?lat&long&alt&vtol`, `/command/rtl`, `/command/set_home`
+- `POST /movement/go_to_gps`, `POST /movement/go_to_gps_wait`, `GET /movement/stop`
 - `/telemetry/general`, `/telemetry/gps`, `/telemetry/battery_info`, `/telemetry/sensor_status`, `/telemetry/error_info`, `/telemetry/home_info`
 
 Calls to copter-only routes (`/mission/*`, `/peripherical/*`, `/movement/go_to_ned`, etc.) return HTTP 404 in plane mode.
@@ -630,8 +630,8 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | `uav_api/routers/copter_telemetry.py` | Copter endpoints: GPS, NED, compass, battery, sensor status, home info |
 | `uav_api/routers/copter_mission.py` | Copter endpoints: upload-script, list-scripts, execute-script, running-scripts, stop-script, clear-scripts |
 | `uav_api/routers/copter_peripherical.py` | Copter endpoints: take_photo, servo_output |
-| `uav_api/routers/plane_command.py` | Plane endpoints (beta): arm, disarm, takeoff, land, RTL, set_home |
-| `uav_api/routers/plane_movement.py` | Plane endpoints (beta): go_to_gps, go_to_gps_wait, land_at, stop |
+| `uav_api/routers/plane_command.py` | Plane endpoints (beta): arm, disarm, takeoff, land, land_at, RTL, set_home |
+| `uav_api/routers/plane_movement.py` | Plane endpoints (beta): go_to_gps, go_to_gps_wait, stop |
 | `uav_api/routers/plane_telemetry.py` | Plane endpoints (beta): general, GPS, battery, sensor status, error, home info |
 | `uav_api/classes/movement.py` | Pydantic models: `Gps_pos`, `Local_pos`, `Local_velocity` |
 | `uav_api/classes/peripherical.py` | Pydantic model: `Servo_output` |

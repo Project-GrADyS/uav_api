@@ -34,18 +34,6 @@ def go_to_gps_wait(pos: Gps_pos,
             "result": f"Arrived at coord ({pos.lat}, {pos.long}, {pos.alt})"}
 
 
-@plane_movement_router.post("/land_at", tags=["movement"], summary="Flies to the specified GPS position then switches to LAND")
-def land_at(pos: Gps_pos,
-            uav: Plane = Depends(get_plane_instance),
-            args: Namespace = Depends(get_args)):
-    try:
-        uav.land_at(pos.lat, pos.long, pos.alt)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LAND_AT FAIL: {e}")
-    return {"device": "uav", "id": str(args.sysid),
-            "result": f"Landed at coord ({pos.lat}, {pos.long}, {pos.alt})"}
-
-
 @plane_movement_router.get("/stop", tags=["movement"], summary="Closest analog of stop for fixed-wing: enter LOITER at current position")
 def stop(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:

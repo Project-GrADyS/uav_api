@@ -50,6 +50,17 @@ def land(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get
     return {"device": "uav", "id": str(args.sysid), "result": "Landed successfully"}
 
 
+@plane_command_router.get("/land_at", tags=["command"], summary="Uploads a simple landing mission at the given point and starts it in AUTO mode (returns immediately)")
+def land_at(lat: float, long: float, alt: float = 0, vtol: bool = False,
+            uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
+    try:
+        uav.land_at(lat, long, alt, vtol=vtol)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LAND_AT_COMMAND FAIL: {e}")
+    return {"device": "uav", "id": str(args.sysid),
+            "result": f"Landing mission started for coord ({lat}, {long})"}
+
+
 @plane_command_router.get("/rtl", tags=["command"], summary="Switches to RTL and returns when plane is near home")
 def rtl(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:

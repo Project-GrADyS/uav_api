@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **BREAKING (plane):** `POST /movement/land_at` was replaced by
+  `GET /command/land_at?lat&long&alt&vtol`. Instead of the composite
+  DO_REPOSITION → LAND (which needed a pre-arranged approach), it uploads a
+  two-item mission (home + `NAV_LAND`, or `NAV_VTOL_LAND` with `vtol=true`)
+  and switches to AUTO, returning as soon as the mode switch succeeds.
+- Plane mode is no longer labeled beta in the API description.
 - MAVLink receive architecture rewritten around a single consumer. A new
   `Vehicle` base class (`uav_api/vehicles/vehicle.py`) owns the connection and
   runs one dedicated receiver thread — the only line of execution that ever

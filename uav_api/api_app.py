@@ -29,7 +29,7 @@ metadata = [
 ]
 
 description = f"""
-## {args.vehicle.upper()}{" (BETA)"if args.vehicle == "plane" else ""} INFORMATION
+## {args.vehicle.upper()} INFORMATION
 * SYSID = **{args.sysid}**
 * CONNECTION_STRING = **{args.uav_connection}**
 """
