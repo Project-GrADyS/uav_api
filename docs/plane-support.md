@@ -34,8 +34,9 @@ For copter (default) endpoint contracts see [`api-specification.md`](api-specifi
 
 | Path | Role |
 |------|------|
-| `uav_api/vehicles/plane.py` | `class Plane` — MAVLink wrapper. Logger named `"PLANE"`. |
-| `uav_api/vehicles/copter.py` | `class Copter` — parallel module; no shared base class (deliberate). |
+| `uav_api/vehicles/vehicle.py` | `class Vehicle` — shared base: MAVLink connection, single receiver thread, subscriptions, common commands/waits. |
+| `uav_api/vehicles/plane.py` | `class Plane(Vehicle)` — plane-specific behavior. Logger named `"PLANE"`. |
+| `uav_api/vehicles/copter.py` | `class Copter(Vehicle)` — copter-specific behavior. |
 | `uav_api/routers/plane_command.py` | `arm`, `disarm`, `takeoff`, `land`, `land_at`, `rtl`, `set_home`. |
 | `uav_api/routers/plane_movement.py` | `go_to_gps`, `go_to_gps_wait`, `stop`. |
 | `uav_api/routers/plane_telemetry.py` | `general`, `gps`, `battery_info`, `sensor_status`, `error_info`, `home_info`. |

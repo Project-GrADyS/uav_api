@@ -617,9 +617,10 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 |------|---------|
 | `uav_api/run_api.py` | CLI entry point — parses args, runs setup, launches uvicorn |
 | `uav_api/api_app.py` | FastAPI app definition; conditional router registration by `--vehicle`; imports lifespan from `lifespan.py` |
-| `uav_api/lifespan.py` | Async lifespan context manager — startup/shutdown of SITL, drain loop, scripts watcher, and GS task, with partial-startup cleanup |
-| `uav_api/vehicles/copter.py` | Copter MAVLink wrapper — full GUIDED surface (~1850 lines) |
-| `uav_api/vehicles/plane.py` | Plane MAVLink wrapper (beta) — GUIDED + TAKEOFF-mode takeoff, QuadPlane helpers |
+| `uav_api/lifespan.py` | Async lifespan context manager — startup/shutdown of SITL, scripts watcher, and GS task, with partial-startup cleanup |
+| `uav_api/vehicles/vehicle.py` | Shared `Vehicle` base — MAVLink connection, single receiver thread, subscriptions, common commands/waits |
+| `uav_api/vehicles/copter.py` | `Copter(Vehicle)` — copter-specific GUIDED commands and movement |
+| `uav_api/vehicles/plane.py` | `Plane(Vehicle)` — TAKEOFF-mode takeoff, loiter, QuadPlane helpers |
 | `uav_api/args.py` | CLI argument parsing; config serialized to `UAV_ARGS` env var |
 | `uav_api/routers/router_dependencies.py` | Lazy singletons `get_copter_instance` / `get_plane_instance` + `args` via `Depends()` |
 | `uav_api/gradys_gs.py` | Async coroutine that POSTs GPS location to Gradys GS every second |
@@ -651,8 +652,8 @@ The application lifecycle is managed by a FastAPI `@asynccontextmanager` lifespa
 **uvicorn HTTP server**
 Launched by `uav_api/run_api.py`. All processes below run within its lifetime.
 
-**MAVLink drain loop**
-An `asyncio` task running `copter.run_drain_mav_loop()`. Continuously drains buffered MAVLink messages to prevent connection stalls. Cancelled on shutdown.
+**MAVLink receiver thread**
+A dedicated daemon thread started by `Vehicle.connect()` — the only line of execution that reads the MAVLink connection. It keeps the latest-by-type message cache fresh, dispatches messages to subscription queues that request handlers wait on, and sends the GCS heartbeat. Stopped by `vehicle.close()` on shutdown, which also unblocks any in-flight waiters.
 
 ### Conditional: simulated mode (`--simulated true`)
 
