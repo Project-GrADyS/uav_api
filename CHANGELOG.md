@@ -5,6 +5,58 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- MAVLink receive architecture rewritten around a single consumer. A new
+  `Vehicle` base class (`uav_api/vehicles/vehicle.py`) owns the connection and
+  runs one dedicated receiver thread — the only line of execution that ever
+  reads from pymavlink. Every other consumer reads either the latest-by-type
+  message cache or a per-waiter subscription queue fed by the receiver, so
+  responses wake their waiter the instant they are parsed. All sends are
+  serialized behind one lock. `Copter` and `Plane` are now subclasses holding
+  only vehicle-specific behavior.
+- Endpoint latency improved across the board: telemetry endpoints are O(1)
+  cache reads instead of busy-spin socket reads, command endpoints wake on ack
+  arrival instead of polling every 50 ms, and long waits (goto, RTL, arm) pace
+  at the telemetry stream rate instead of fighting other readers for the
+  socket.
+- The background `run_drain_mav_loop` asyncio task was removed; draining is
+  the receiver thread's job. GCS heartbeats are now sent from the receiver
+  loop on schedule instead of piggybacking on message parsing (previously they
+  silently stopped whenever no traffic was being parsed).
+- Previously unbounded blocking reads (`distance_to_home`, `wait_waypoint`,
+  mission helpers, `mavfile.location()`) now have timeouts; the failure mode
+  changes from hanging forever to raising a timeout error.
+
+### Fixed
+- Concurrent request handlers, the drain loop, and the Gradys GS task all read
+  the same MAVLink connection at once, silently stealing each other's messages
+  (pymavlink's type-filtered reads discard every non-matching message).
+  Commands missed their acks, mission uploads lost handshake messages, and
+  telemetry reads could spin for their full timeout. The single-consumer
+  receiver eliminates the entire class of races; the 0.2.2 `COMMAND_ACK`
+  hook workaround is superseded and removed.
+- Plane commands still raced for their `COMMAND_ACK` (the 0.2.2 copter fix was
+  never ported) and `Plane.run_cmd` byte-drained the connection unparsed,
+  destroying other readers' in-flight messages. Both are gone via the shared
+  base class.
+- The Gradys GS task called a blocking 5-second MAVLink read on the event
+  loop every second; it now uses a non-blocking cache read
+  (`sensor_has_state_cached`).
+- `GET /command/set_home` failed with `MAV_RESULT_FAILED` when called before
+  the EKF set its origin (a boot-time race). The command is now retried until
+  the autopilot accepts it or a 30 s timeout expires.
+- A latched `in_drain_mav` flag (set once, never cleared on the default code
+  path) permanently disabled the idle hook; the flag and hook are gone with
+  the drain machinery.
+
+### Added
+- `tests/concurrency_test.py`: while `POST /movement/go_to_gps_wait` is in
+  flight, telemetry endpoints must answer with p95 latency under 0.5 s and an
+  ack-waiting command must succeed — the exact scenario that hung before the
+  refactor.
+
 ## [0.2.2] - 2026-08-13
 
 ### Added

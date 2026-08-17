@@ -179,11 +179,6 @@ async def lifespan(app: FastAPI):
         raise
 
 
-    # Starting task that will continuously drain MAVLink messages
-    logger.info("Starting Drain MAVLink loop...")
-    drain_mav_loop = asyncio.create_task(vehicle.run_drain_mav_loop())
-    logger.info("Drain MAVLink loop started.")
-
     # Scripts watcher (copter only — mission router is not registered for plane)
     scripts_watcher_task = None
     if args.vehicle != "plane":
@@ -204,23 +199,6 @@ async def lifespan(app: FastAPI):
 
     logger.info("Closing tmux windows related to running scripts...")
     kill_tmux_sessions(f"UAV_API_{args.sysid}-")
-
-    # Close SITL
-    if args.simulated:
-        logger.info("Closing SITL and all associated windows...")
-        kill_sitl_by_tag(sitl_tag)
-        logger.info("SITL and associated windows closed.")
-
-    # Cancelling Drain Mav Loop Task
-    logger.info("Cancelling Drain MAVLink loop...")
-    drain_mav_loop.cancel()
-
-    try:
-        await drain_mav_loop
-    except asyncio.CancelledError:
-        pass
-    finally:
-        logger.info("Drain MAVLink loop has been cancelled.")
 
     if scripts_watcher_task is not None:
         logger.info("Cancelling scripts monitoring loop...")
@@ -244,5 +222,17 @@ async def lifespan(app: FastAPI):
 
         await session.close()
         logger.info("Gradys GS HTTP session closed.")
+
+    # Stop the MAVLink receiver thread and unblock any in-flight request
+    # handlers before tearing the link (and SITL) down.
+    logger.info("Closing MAVLink connection...")
+    vehicle.close()
+    logger.info("MAVLink connection closed.")
+
+    # Close SITL
+    if args.simulated:
+        logger.info("Closing SITL and all associated windows...")
+        kill_sitl_by_tag(sitl_tag)
+        logger.info("SITL and associated windows closed.")
 
     logger.info("UAV_API has shutdown gracefully.")
