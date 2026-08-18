@@ -1,15 +1,15 @@
 from argparse import Namespace
 from fastapi import APIRouter, Depends, HTTPException
 from uav_api.vehicles.plane import Plane
-from uav_api.routers.router_dependencies import get_plane_instance, get_args
+from uav_api.routers.dependencies import get_plane_instance, get_args
 
-plane_telemetry_router = APIRouter(
+router = APIRouter(
     prefix="/telemetry",
     tags=["telemetry"],
 )
 
 
-@plane_telemetry_router.get("/general", tags=["telemetry"], summary="Returns plane general information from VFR_HUD: airspeed, groundspeed, heading, throttle, altitude")
+@router.get("/general", tags=["telemetry"], summary="Returns plane general information from VFR_HUD: airspeed, groundspeed, heading, throttle, altitude")
 def general_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         info = uav.get_general_info()
@@ -29,7 +29,7 @@ def general_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Dep
     }
 
 
-@plane_telemetry_router.get("/gps", tags=["telemetry"], summary="Returns the plane current GPS information (sensor-fused position from GLOBAL_POSITION_INT)")
+@router.get("/gps", tags=["telemetry"], summary="Returns the plane current GPS information (sensor-fused position from GLOBAL_POSITION_INT)")
 def gps_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         info = uav.get_gps_info()
@@ -57,7 +57,7 @@ def gps_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends
     return res_obj
 
 
-@plane_telemetry_router.get("/battery_info", tags=["telemetry"], summary="Returns battery information extracted from SYS_STATUS message")
+@router.get("/battery_info", tags=["telemetry"], summary="Returns battery information extracted from SYS_STATUS message")
 def battery_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         info = uav.get_battery_info()
@@ -66,7 +66,7 @@ def battery_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Dep
     return {"device": "uav", "id": str(args.sysid), "result": "success", "info": info}
 
 
-@plane_telemetry_router.get("/sensor_status", tags=["telemetry"], summary="Returns sensors status extracted from SYS_STATUS message")
+@router.get("/sensor_status", tags=["telemetry"], summary="Returns sensors status extracted from SYS_STATUS message")
 def sensor_status(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         sensors = uav.get_sensor_status()
@@ -75,7 +75,7 @@ def sensor_status(uav: Plane = Depends(get_plane_instance), args: Namespace = De
     return {"device": "uav", "id": str(args.sysid), "result": "success", "status": sensors}
 
 
-@plane_telemetry_router.get("/error_info", tags=["telemetry"], summary="Returns error information extracted from SYS_STATUS message")
+@router.get("/error_info", tags=["telemetry"], summary="Returns error information extracted from SYS_STATUS message")
 def error_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         info = uav.get_error_info()
@@ -84,7 +84,7 @@ def error_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depen
     return {"device": "uav", "id": str(args.sysid), "result": "success", "info": info}
 
 
-@plane_telemetry_router.get("/home_info", tags=["telemetry"], summary="Returns information about HOME position (the (0,0,0) point in static NED frame)")
+@router.get("/home_info", tags=["telemetry"], summary="Returns information about HOME position (the (0,0,0) point in static NED frame)")
 def home_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         info = uav.get_home_position()

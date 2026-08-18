@@ -29,7 +29,7 @@ from unit_helpers import (
 
 from uav_api.api_app import create_app
 from uav_api.args import parse_args
-from uav_api.routers.router_dependencies import (
+from uav_api.routers.dependencies import (
     get_args,
     get_copter_instance,
     get_plane_instance,

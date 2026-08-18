@@ -15,6 +15,7 @@ import pytest
 from unit_helpers import SYSID
 
 
+
 @pytest.fixture
 def tmux_calls(monkeypatch):
     """Record tmux invocations; also neutralize the 1s sleep in stop-script."""
@@ -24,8 +25,8 @@ def tmux_calls(monkeypatch):
         calls.append(list(cmd))
         return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
 
-    monkeypatch.setattr("uav_api.routers.copter_mission.subprocess.run", fake_run)
-    monkeypatch.setattr("uav_api.routers.copter_mission.time.sleep", lambda s: None)
+    monkeypatch.setattr("uav_api.routers.common.mission.subprocess.run", fake_run)
+    monkeypatch.setattr("uav_api.routers.common.mission.time.sleep", lambda s: None)
     return calls
 
 

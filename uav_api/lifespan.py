@@ -8,7 +8,7 @@ import subprocess
 from datetime import datetime
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from uav_api.routers.router_dependencies import get_args, init_copter, init_plane, get_scripts_table
+from uav_api.routers.dependencies import get_args, init_copter, init_plane, get_scripts_table
 from uav_api.gradys_gs import send_location_to_gradys_gs
 from uav_api.log import set_log_config
 

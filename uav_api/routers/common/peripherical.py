@@ -10,9 +10,9 @@ from starlette.background import BackgroundTask
 
 from uav_api.vehicles.copter import Copter
 from uav_api.classes.peripherical import Servo_output
-from uav_api.routers.router_dependencies import get_copter_instance, get_args
+from uav_api.routers.dependencies import get_copter_instance, get_args
 
-copter_peripherical_router = APIRouter(
+router = APIRouter(
     prefix="/peripherical",
     tags=["peripherical"],
 )
@@ -41,7 +41,7 @@ def _build_cmd(command: str, resolution: str, capture_time: int, focus_distance:
     return cmd
 
 
-@copter_peripherical_router.get("/take_photo", tags=["peripherical"],
+@router.get("/take_photo", tags=["peripherical"],
                           summary="Takes a photo using a whitelisted camera CLI tool")
 def take_photo(
     command: str = Query(..., description="Camera tool to use. Allowed: fswebcam, rpicam-still, libcamera-still"),
@@ -85,7 +85,7 @@ def take_photo(
         raise HTTPException(status_code=500, detail=f"TAKE_PHOTO_FAIL: {e}")
 
 
-@copter_peripherical_router.post("/servo_output", tags=["peripherical"],
+@router.post("/servo_output", tags=["peripherical"],
                            summary="Sends a PWM signal to a servo motor")
 def servo_output(servo: Servo_output,
                  uav: Copter = Depends(get_copter_instance),

@@ -13,6 +13,7 @@ import pytest
 from unit_helpers import assert_envelope
 
 
+
 @pytest.fixture
 def camera_calls(monkeypatch):
     """Record camera invocations and write fake JPEG bytes to the output path
@@ -24,7 +25,7 @@ def camera_calls(monkeypatch):
         Path(cmd[-1]).write_bytes(b"JPEGDATA")
         return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
 
-    monkeypatch.setattr("uav_api.routers.copter_peripherical.subprocess.run", fake_run)
+    monkeypatch.setattr("uav_api.routers.common.peripherical.subprocess.run", fake_run)
     return calls
 
 
@@ -34,7 +35,7 @@ def broken_camera(monkeypatch):
     def fake_run(cmd, **kwargs):
         return SimpleNamespace(returncode=1, stdout=b"", stderr=b"no camera detected")
 
-    monkeypatch.setattr("uav_api.routers.copter_peripherical.subprocess.run", fake_run)
+    monkeypatch.setattr("uav_api.routers.common.peripherical.subprocess.run", fake_run)
 
 
 class TestTakePhoto:
