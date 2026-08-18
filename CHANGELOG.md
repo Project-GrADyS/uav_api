@@ -92,8 +92,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     script exit.
   - `README` Testing section documenting both layers, prerequisites and the
     port/sysid allocation table.
+  - `copter` and `plane` pytest markers: select vehicle-specific tests with
+    `-m copter` / `-m plane`, composable with `sitl`
+    (e.g. `pytest -m "plane and not sitl"`).
 
 ### Changed (internal)
+- The routers package was restructured into `uav_api/routers/{copter,plane,common}/`
+  subpackages with short module names (`copter/telemetry.py` instead of
+  `copter_telemetry.py`); the vehicle-agnostic mission and peripherical routers
+  live in `common/`, and `router_dependencies.py` is now
+  `uav_api/routers/dependencies.py`. Each module exports a `router` variable.
+  No HTTP API change.
+- Test modules treat copter and plane as equals: SITL modules are
+  vehicle-prefixed per router (`copter_command_test.py`,
+  `plane_movement_test.py`, ...), the plane suite is split into three modules
+  with their own SITL instances (ports 8007-8009), and the unit layer mirrors
+  the router layout. The `flying=True` fixture now supports plane (arms and
+  climbs to 50 m in GUIDED).
+- Docs no longer label plane support as beta: it is covered by unit tests and
+  SITL integration modules, and README/docs module maps reflect the new
+  router layout.
 - `uav_api/api_app.py` now exposes a `create_app(args)` factory; the module
   imports cleanly without the `UAV_ARGS` environment variable (previously it
   crashed at import). The `uav_api.api_app:app` uvicorn/hypercorn entrypoint
