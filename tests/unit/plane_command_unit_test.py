@@ -1,12 +1,10 @@
-"""Unit tests for the plane routers — first coverage of the plane surface.
+"""Unit tests for the plane command router: HTTP contract + vehicle delegation."""
 
-Everything here (plane command, movement and telemetry) has no SITL test
-history; these tests pin the HTTP contract and the router → Plane delegation.
-"""
+import pytest
 
-from unit_helpers import BATTERY, ERRORS, GENERAL, SENSORS, assert_envelope
+from unit_helpers import assert_envelope
 
-GPS_BODY = {"lat": -15.84, "long": -47.92, "alt": 100}
+pytestmark = pytest.mark.plane
 
 
 class TestCommand:
@@ -66,83 +64,3 @@ class TestCommand:
         r = plane_client.get("/command/set_home")
         assert r.status_code == 200
         fake_plane.set_home.assert_called_once_with()
-
-
-class TestMovement:
-    def test_go_to_gps(self, plane_client, fake_plane):
-        r = plane_client.post("/movement/go_to_gps", json=GPS_BODY)
-        assert r.status_code == 200
-        assert_envelope(r.json(), "(-15.84, -47.92, 100.0)")
-        fake_plane.go_to_gps.assert_called_once_with(-15.84, -47.92, 100.0)
-
-    def test_go_to_gps_wait(self, plane_client, fake_plane):
-        r = plane_client.post("/movement/go_to_gps_wait", json=GPS_BODY)
-        assert r.status_code == 200
-        assert_envelope(r.json(), "Arrived")
-        fake_plane.go_to_gps_wait.assert_called_once_with(-15.84, -47.92, 100.0)
-
-    def test_go_to_gps_malformed_body_is_422(self, plane_client, fake_plane):
-        r = plane_client.post("/movement/go_to_gps", json={"lat": -15.84})
-        assert r.status_code == 422
-        fake_plane.go_to_gps.assert_not_called()
-
-    def test_stop(self, plane_client, fake_plane):
-        r = plane_client.get("/movement/stop")
-        assert r.status_code == 200
-        assert_envelope(r.json(), "loitering")
-        fake_plane.stop.assert_called_once_with()
-
-
-class TestTelemetry:
-    def test_general(self, plane_client):
-        r = plane_client.get("/telemetry/general")
-        assert r.status_code == 200
-        assert r.json()["info"] == {
-            "airspeed": GENERAL.airspeed,
-            "groundspeed": GENERAL.groundspeed,
-            "heading": GENERAL.heading,
-            "throttle": GENERAL.throttle,
-            "alt": GENERAL.alt,
-        }
-
-    def test_gps_conversions(self, plane_client):
-        r = plane_client.get("/telemetry/gps")
-        assert r.status_code == 200
-        info = r.json()["info"]
-        assert info["position"] == {
-            "lat": -15.840081,
-            "lon": -47.926642,
-            "alt": 1042.0,
-            "relative_alt": 15.0,
-        }
-        assert info["velocity"] == {"vx": 1.2, "vy": -0.4, "vz": 0.1}
-        assert info["heading"] == 90.0
-
-    def test_battery_info(self, plane_client):
-        r = plane_client.get("/telemetry/battery_info")
-        assert r.status_code == 200
-        assert r.json()["info"] == BATTERY
-
-    def test_sensor_status(self, plane_client):
-        r = plane_client.get("/telemetry/sensor_status")
-        assert r.status_code == 200
-        assert r.json()["status"] == SENSORS
-
-    def test_error_info(self, plane_client):
-        r = plane_client.get("/telemetry/error_info")
-        assert r.status_code == 200
-        assert r.json()["info"] == ERRORS
-
-    def test_home_info_conversions(self, plane_client):
-        r = plane_client.get("/telemetry/home_info")
-        assert r.status_code == 200
-        body = r.json()
-        assert body["lat"] == -15.840081
-        assert body["lon"] == -47.926642
-        assert body["altitude"] == 1042.0
-
-    def test_telemetry_failure_is_500(self, plane_client, fake_plane):
-        fake_plane.get_gps_info.side_effect = Exception("no heartbeat")
-        r = plane_client.get("/telemetry/gps")
-        assert r.status_code == 500
-        assert "GET_GPS_POSITION FAIL" in r.json()["detail"]

@@ -12,6 +12,7 @@ import pytest
 
 from unit_helpers import assert_envelope
 
+pytestmark = pytest.mark.copter
 
 
 @pytest.fixture

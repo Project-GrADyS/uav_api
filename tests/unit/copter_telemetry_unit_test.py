@@ -5,9 +5,13 @@ vel/100 to m/s, hdg/100 to degrees) are real handler logic the SITL suite
 can only bound-check — here they are asserted exactly.
 """
 
+import pytest
+
 from unit_helpers import (
     BATTERY, COMPASS, ERRORS, GENERAL, HOME, NED, SENSORS, assert_envelope,
 )
+
+pytestmark = pytest.mark.copter
 
 
 def test_general(copter_client):

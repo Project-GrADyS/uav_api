@@ -14,6 +14,7 @@ import pytest
 
 from unit_helpers import SYSID
 
+pytestmark = pytest.mark.copter
 
 
 @pytest.fixture

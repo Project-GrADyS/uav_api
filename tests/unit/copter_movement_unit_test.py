@@ -4,7 +4,11 @@ Covers the endpoints the SITL suite leaves untested: go_to_ned_wait,
 drive_wait and set_yaw_rate, plus direct coverage for set_heading.
 """
 
+import pytest
+
 from unit_helpers import NED_POSITION, assert_envelope
+
+pytestmark = pytest.mark.copter
 
 GPS_BODY = {"lat": -15.84, "long": -47.92, "alt": 30}
 NED_BODY = {"x": 10.0, "y": 5.0, "z": -20.0}

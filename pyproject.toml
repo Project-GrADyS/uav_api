@@ -55,6 +55,8 @@ testpaths = ["tests"]
 addopts = "--strict-markers"
 markers = [
     "sitl: integration test that spawns ArduPilot SITL; requires sim_vehicle.py, tmux and a local environment. Deselect with -m 'not sitl'.",
+    "copter: test that exercises the copter vehicle/app. Run only copter tests with -m copter.",
+    "plane: test that exercises the plane vehicle/app. Run only plane tests with -m plane.",
 ]
 
 [tool.ruff]

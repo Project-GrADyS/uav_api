@@ -1,6 +1,10 @@
 """Unit tests for the copter command router: HTTP contract + vehicle delegation."""
 
+import pytest
+
 from unit_helpers import assert_envelope
+
+pytestmark = pytest.mark.copter
 
 
 class TestArm:

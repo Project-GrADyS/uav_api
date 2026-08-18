@@ -17,7 +17,7 @@ import pytest
 
 from conftest import make_api_fixture
 
-pytestmark = pytest.mark.sitl
+pytestmark = [pytest.mark.sitl, pytest.mark.copter]
 
 api = make_api_fixture(8006, 6, flying=True)
 
