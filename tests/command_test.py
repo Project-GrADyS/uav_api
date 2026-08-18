@@ -6,9 +6,12 @@ home tests must run before any flight (set_home while airborne shifts every
 later relative altitude), and the flight tests arm/take off themselves.
 """
 
-import time
+
+import pytest
 
 from conftest import make_api_fixture, wait_for_altitude, SPEEDUP
+
+pytestmark = pytest.mark.sitl
 
 api = make_api_fixture(port=8001, sysid=1, flying=False)
 
