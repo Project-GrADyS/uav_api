@@ -24,10 +24,8 @@ from flight_helpers import (
     create_session,
     send_command,
     get_home_ned,
-    ned_relative_to_absolute,
     wait_for_arrival,
     setup_graceful_shutdown,
-    euclidean_distance,
 )
 
 SLEEP_DURATION = 4  # seconds between commands
@@ -151,7 +149,7 @@ time.sleep(SLEEP_DURATION)
 
 # --- Leg 3: Delivery -> Home ---
 home_relative = (0, 0, 0)
-print(f"Returning to home...")
+print("Returning to home...")
 target_abs = go_to_relative(session, base_url, home_relative, home)
 time.sleep(SLEEP_DURATION)
 

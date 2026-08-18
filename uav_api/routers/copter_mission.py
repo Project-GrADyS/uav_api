@@ -6,7 +6,7 @@ import os
 
 from datetime import datetime
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from uav_api.routers.router_dependencies import get_args, get_scripts_table
 from uav_api.classes.script import Script
 

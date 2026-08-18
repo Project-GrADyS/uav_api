@@ -1,5 +1,4 @@
 from argparse import Namespace
-from time import sleep
 from fastapi import APIRouter, Depends, HTTPException
 from uav_api.vehicles.copter import Copter
 from uav_api.routers.router_dependencies import get_copter_instance, get_args

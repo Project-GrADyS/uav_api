@@ -578,7 +578,7 @@ class Vehicle:
 
     def set_message_rate_hz(self, id, rate_hz):
         """set a message rate in Hz; 0 for original, -1 to disable"""
-        if type(id) == str:
+        if isinstance(id, str):
             id = eval("mavutil.mavlink.MAVLINK_MSG_ID_%s" % id)
         if rate_hz == 0 or rate_hz == -1:
             set_interval = rate_hz
@@ -690,7 +690,7 @@ class Vehicle:
 
     def send_get_parameter_direct(self, name):
         encname = name
-        if sys.version_info.major >= 3 and type(encname) != bytes:
+        if sys.version_info.major >= 3 and not isinstance(encname, bytes):
             encname = bytes(encname, 'ascii')
         self.tx.param_request_read_send(self.target_system,
                                         1,
