@@ -8,13 +8,11 @@ import subprocess
 from datetime import datetime
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from uav_api.routers.router_dependencies import get_args, get_copter_instance, get_plane_instance, get_scripts_table
+from uav_api.routers.router_dependencies import get_args, init_copter, init_plane, get_scripts_table
 from uav_api.gradys_gs import send_location_to_gradys_gs
 from uav_api.log import set_log_config
 
 logger = logging.getLogger("SYSTEM")
-
-args = get_args()
 
 async def scripts_watcher_loop(scripts_table, interval=2.0):
     """Polls tmux for entries marked running; transitions them to stopped when the session ends."""
@@ -144,6 +142,7 @@ def cleanup_partial_startup(sitl_tag, args):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    args = get_args()
     # Configure loggers
     set_log_config(args)
     # Create a unique tag for this specific SITL instance (also used for cleanup on failure)
@@ -169,9 +168,9 @@ async def lifespan(app: FastAPI):
     try:
         logger.info("Connecting to vehicle...")
         if args.vehicle == "plane":
-            vehicle = get_plane_instance(args.sysid, conn)
+            vehicle = init_plane(args.sysid, conn)
         else:
-            vehicle = get_copter_instance(args.sysid, conn)
+            vehicle = init_copter(args.sysid, conn)
         logger.info("Vehicle connection established.")
     except Exception as e:
         logger.error(f"Failed to connect to vehicle on {conn}: {e}")
