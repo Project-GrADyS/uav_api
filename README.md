@@ -59,6 +59,11 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
   - [Make polygon with Drive](#make-polygon-with-drive)
   - [Delivery Mission Simulation](#delivery-mission-simulation)
   - [GPS-Based Follower](#gps-based-follower)
+- [Testing](#testing)
+  - [Setup](#setup)
+  - [Unit tests (run anywhere)](#unit-tests-run-anywhere)
+  - [SITL integration tests (local only)](#sitl-integration-tests-local-only)
+  - [Lint](#lint)
 
 ---
 
@@ -245,7 +250,7 @@ The API supports two ArduPilot vehicles, selected at startup with `--vehicle`:
 | ArduCopter (QuadCopter) | `--vehicle copter` *(default)* | Stable — full router surface, integration tests pass. |
 | ArduPlane / QuadPlane | `--vehicle plane` | **Beta** |
 
-> ⚠️ **Beta**: Plane support is in beta — some functionalities may not work as intended. The plane endpoint surface is intentionally smaller than copter (no `/mission/*`, no `/peripherical/*`, fewer movement endpoints) and there are no integration tests yet. Treat as preview. Full details in [`docs/plane-support.md`](docs/plane-support.md).
+> ⚠️ **Beta**: Plane support is in beta — some functionalities may not work as intended. The plane endpoint surface is intentionally smaller than copter (no `/mission/*`, no `/peripherical/*`, fewer movement endpoints). Covered by unit tests (`tests/unit/plane_unit_test.py`) and a SITL integration module (`tests/plane_test.py`). Full details in [`docs/plane-support.md`](docs/plane-support.md).
 
 **Run as plane in simulation:**
 
@@ -1402,4 +1407,83 @@ if __name__ == "__main__":
     while True:
         loop(follower_session, follower_base_url,
              leader_session, leader_base_url, home_alt, leader_home_alt, args)
+```
+
+---
+
+# Testing
+
+The test suite has two layers:
+
+| Layer | Location | Needs | Command |
+|-------|----------|-------|---------|
+| Unit tests | `tests/unit/` | nothing beyond the dev extra | `pytest -m "not sitl"` |
+| SITL integration tests | `tests/*_test.py` | ArduPilot + tmux | `pytest tests/<module>_test.py` |
+
+## Setup
+
+Install the package with the development extra (adds `pytest`, `requests`,
+`httpx` and `ruff`):
+
+```bash
+pip install -e .[dev]
+```
+
+## Unit tests (run anywhere)
+
+The unit layer builds the FastAPI app with `create_app()` and a mocked
+vehicle — no SITL, no MAVLink, no tmux — and pins the HTTP contract of every
+router (copter and plane), including the MAVLink unit conversions in the
+telemetry handlers and the mission-script lifecycle:
+
+```bash
+pytest -m "not sitl"
+```
+
+This is what CI runs on every pull request (see
+`.github/workflows/ci.yml`), together with `ruff check .`.
+
+## SITL integration tests (local only)
+
+Every module directly under `tests/` spawns a real SITL-backed API server
+(marked with the `sitl` pytest marker). Prerequisites:
+
+- ArduPilot installed with `sim_vehicle.py` on `PATH` (or pass
+  `--ardupilot_path`) — see [Prerequisites](#prerequisites)
+- `tmux` (used by the mission router)
+
+Modules must run **sequentially** — every SITL instance shares the same
+working directory (`~/uav_api_logs/ardupilot_logs`) — so run them one at a
+time, never with `pytest-xdist`:
+
+```bash
+pytest tests/command_test.py
+pytest tests/mission_test.py
+pytest tests/movement_test.py
+pytest tests/peripherical_test.py
+pytest tests/telemetry_test.py
+pytest tests/concurrency_test.py
+pytest tests/plane_test.py
+```
+
+Each module owns a fixed port/sysid so state cannot leak between modules:
+
+| Module | Port | Sysid | Vehicle |
+|--------|------|-------|---------|
+| `command_test` | 8001 | 1 | copter |
+| `mission_test` | 8002 | 2 | copter |
+| `movement_test` | 8003 | 3 | copter |
+| `peripherical_test` | 8004 | 4 | copter |
+| `telemetry_test` | 8005 | 5 | copter |
+| `concurrency_test` | 8006 | 6 | copter |
+| `plane_test` | 8007 | 7 | plane |
+
+SITL runs headless; if a module fails, SITL output is in
+`~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` and the API log is in
+`~/uav_api_logs/uav_logs/uav_<sysid>.log`.
+
+## Lint
+
+```bash
+ruff check .
 ```

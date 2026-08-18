@@ -56,12 +56,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A latched `in_drain_mav` flag (set once, never cleared on the default code
   path) permanently disabled the idle hook; the flag and hook are gone with
   the drain machinery.
+- `POST /movement/go_to_gps_wait` (plane) timed out on every call (found by
+  the new `tests/plane_test.py`): the arrival check compared the target's
+  home-relative altitude against the plane's absolute AMSL altitude, and its
+  50 m horizontal accuracy was unreachable — an arriving fixed-wing loiters
+  around the target and never comes closer than the loiter radius plus entry
+  overshoot. The altitude is now converted to AMSL for the check and the
+  default accuracy widened to 120 m (2x the default `WP_LOITER_RAD`).
 
 ### Added
 - `tests/concurrency_test.py`: while `POST /movement/go_to_gps_wait` is in
   flight, telemetry endpoints must answer with p95 latency under 0.5 s and an
   ack-waiting command must succeed — the exact scenario that hung before the
   refactor.
+- Testing & CI overhaul (#26):
+  - `dev` optional-dependency extra (`pip install -e .[dev]`) declaring the
+    previously undeclared test dependencies (`pytest`, `requests`, `httpx`)
+    plus `ruff`, with pytest and ruff config in `pyproject.toml`.
+  - GitHub Actions workflow running `ruff check` and the non-SITL test subset
+    (Python 3.10 and 3.12) on every push to main and every pull request.
+  - `sitl` pytest marker on all SITL-backed integration modules, so
+    `pytest -m "not sitl"` runs anywhere without ArduPilot.
+  - Unit-test layer (`tests/unit/`, 85 tests): FastAPI `TestClient` against
+    `create_app()` with an autospec-mocked vehicle. Pins the HTTP contract of
+    every copter and plane endpoint — including the previously untested plane
+    surface, `/mission/stop-script/`, `/mission/running-scripts`,
+    `go_to_ned_wait`, `drive_wait`, `set_heading` and `set_yaw_rate` — the
+    MAVLink unit conversions in the telemetry handlers, and the exact tmux
+    argv of the mission-script lifecycle.
+  - `tests/plane_test.py`: first plane SITL integration module (port 8007,
+    sysid 7) flying a full arc: telemetry grounded → arm → takeoff →
+    `go_to_gps_wait` → `stop` (LOITER) → RTL → fire-and-forget `land_at`.
+  - Mission lifecycle SITL test asserting execute → running-scripts →
+    stop-script transitions plus the scripts-watcher detecting a natural
+    script exit.
+  - `README` Testing section documenting both layers, prerequisites and the
+    port/sysid allocation table.
+
+### Changed (internal)
+- `uav_api/api_app.py` now exposes a `create_app(args)` factory; the module
+  imports cleanly without the `UAV_ARGS` environment variable (previously it
+  crashed at import). The `uav_api.api_app:app` uvicorn/hypercorn entrypoint
+  is unchanged.
+- Vehicle construction split from the request dependency
+  (`init_copter`/`init_plane` for the lifespan, no-arg
+  `get_copter_instance`/`get_plane_instance` for requests). This removes the
+  phantom `sysid`/`connection` query parameters that previously leaked into
+  every endpoint's OpenAPI schema (they were never functional).
+- Repo-wide `ruff` cleanup (unused imports, placeholder-less f-strings,
+  `isinstance` type checks); no behavior changes.
 
 ## [0.2.2] - 2026-08-13
 
