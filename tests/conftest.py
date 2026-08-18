@@ -13,6 +13,12 @@ Port/sysid allocation:
     movement_test     8003 / 3
     peripherical_test 8004 / 4
     telemetry_test    8005 / 5
+    concurrency_test  8006 / 6
+    plane_test        8007 / 7
+
+All modules in this directory spawn SITL and are marked with the `sitl`
+marker (pytestmark). The unit layer in tests/unit/ runs anywhere with
+`pytest -m "not sitl"`.
 
 Requirements:
     - ArduPilot installed with sim_vehicle.py on PATH (or pass --ardupilot_path)
@@ -108,7 +114,9 @@ def _kill_stray_sitl(sysid):
             continue
 
 
-def start_api(port, sysid, flying=False):
+def start_api(port, sysid, flying=False, vehicle="copter"):
+    # flying=True bootstraps via /telemetry/ned, which only copter serves.
+    assert not (flying and vehicle == "plane"), "flying=True is copter-only"
     _kill_stray_sitl(sysid)
     # Parameters written by a previous run (e.g. SIM_SPEEDUP) persist in the
     # shared eeprom and silently override the --speedup we pass.
@@ -123,6 +131,7 @@ def start_api(port, sysid, flying=False):
         "--port", str(port),
         "--sysid", str(sysid),
         "--uav_connection", f"127.0.0.1:{17170 + sysid}",
+        "--vehicle", vehicle,
     ])
     client = Client(port)
     try:
@@ -149,13 +158,13 @@ def stop_api(proc, sysid):
         _kill_stray_sitl(sysid)
 
 
-def make_api_fixture(port, sysid, flying=False):
+def make_api_fixture(port, sysid, flying=False, vehicle="copter"):
     """Build a module-scoped fixture that yields a Client for a fresh
     SITL-backed API server (armed and hovering at 15 m when flying=True)."""
 
     @pytest.fixture(scope="module")
     def api(request):
-        proc, client = start_api(port, sysid, flying)
+        proc, client = start_api(port, sysid, flying, vehicle)
         yield client
         stop_api(proc, sysid)
 
