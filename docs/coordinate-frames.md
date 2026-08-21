@@ -27,7 +27,7 @@ Same axes, but meters/s. Used only by `/movement/travel_at_ned`. Note the body m
 
 `copter.py` computes a longitude scale as `cos(lat * radians(1))` (see `Copter.longitude_scale`). Internally, NED positions are projected back to GPS with this scale when needed. Clients rarely need to convert by hand; when they do, [gradys-embedded](https://github.com/Project-GrADyS/gradys-embedded) has a reference implementation of the cartesian↔GPS conversion against a shared origin.
 
-## SITL quirks (`--simulated true`)
+## SITL quirks (`--simulated`)
 
 **xterm wrapping.** By default SITL is spawned as `xterm -e sim_vehicle.py ...` (see `start_sitl` in `lifespan.py:85`). The xterm window is the only place SITL stderr/stdout land, so if SITL fails to come up, the API will just time out on its connect retries while the xterm shows the real error. Always check the xterm window first.
 

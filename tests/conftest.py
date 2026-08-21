@@ -138,7 +138,7 @@ def start_api(port, sysid, flying=False, vehicle="copter"):
         os.remove(eeprom)
 
     proc = spawn_with_args([
-        "--simulated", "true",
+        "--simulated",
         "--headless",
         "--speedup", str(SPEEDUP),
         "--port", str(port),

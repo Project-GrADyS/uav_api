@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **BREAKING (CLI):** `--simulated` is now a bare flag (`action='store_true'`),
+  consistent with `--headless` and `--udp`. `--simulated true` is rejected by
+  argparse; the old form was broken anyway — `type=bool` made `--simulated
+  false` silently enable simulation. Config files are unaffected:
+  `simulated = true/false` (and `yes/no`, `on/off`, `1/0`) keep working.
 - **BREAKING (plane):** `POST /movement/land_at` was replaced by
   `GET /command/land_at?lat&long&alt&vtol`. Instead of the composite
   DO_REPOSITION → LAND (which needed a pre-arranged approach), it uploads a

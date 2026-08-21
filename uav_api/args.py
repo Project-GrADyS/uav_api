@@ -92,9 +92,9 @@ def parse_mode(mode_parser):
     mode_parser.add_argument(
         '--simulated',
         dest='simulated',
-        type=bool,
+        action='store_true',
         default=False,
-        help="Wheter to simulate copter using Ardupilot's SITL or not"
+        help="Simulate the vehicle using Ardupilot's SITL (bare flag; presence enables simulation)"
     )
 
     mode_parser.add_argument(

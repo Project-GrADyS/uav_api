@@ -170,7 +170,7 @@ notes, why the unit is written the way it is, and troubleshooting.
 This starts both ArduCopter SITL (in a new `xterm` window) and the API — see [Running headless](#running-headless) for the no-window variant:
 
 ```bash
-uav-api --simulated true --speedup 1 --port 8000 --sysid 1
+uav-api --simulated --speedup 1 --port 8000 --sysid 1
 ```
 
 SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`). The `--speedup` factor controls simulation speed (e.g. `5` = 5× real time). The `--location` argument sets the SITL home position (default `AbraDF`).
@@ -180,7 +180,7 @@ SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`).
 `--headless` runs the same simulation without opening any window, so it works on a machine with no X server — CI, a remote box, or over SSH:
 
 ```bash
-uav-api --simulated true --headless --speedup 1 --port 8000 --sysid 1
+uav-api --simulated --headless --speedup 1 --port 8000 --sysid 1
 ```
 
 This does three things, and all three are required:
@@ -211,10 +211,10 @@ Simulated mode launches SITL through ArduPilot's `sim_vehicle.py` script. How th
 
 ```bash
 # Default — sim_vehicle.py comes from PATH
-uav-api --simulated true --port 8000 --sysid 1
+uav-api --simulated --port 8000 --sysid 1
 
 # Explicit — use this ArduPilot repository, regardless of PATH
-uav-api --simulated true --ardupilot_path ~/ardupilot --port 8000 --sysid 1
+uav-api --simulated --ardupilot_path ~/ardupilot --port 8000 --sysid 1
 ```
 
 Use `--ardupilot_path` when ArduPilot is not on your `PATH`, or when you keep several ArduPilot checkouts and want to select one per API instance.
@@ -255,7 +255,7 @@ The API supports two ArduPilot vehicles, selected at startup with `--vehicle`:
 **Run as plane in simulation:**
 
 ```bash
-uav-api --vehicle plane --simulated true --speedup 1 --port 8000 --sysid 1
+uav-api --vehicle plane --simulated --speedup 1 --port 8000 --sysid 1
 ```
 
 This spawns ArduPlane SITL (instead of ArduCopter) and registers only the plane routers. Consumer URLs are unchanged — `/command/arm`, `/movement/go_to_gps`, `/telemetry/gps` work the same way; the endpoint *set* is smaller. Plane mode exposes:
@@ -272,11 +272,11 @@ The CLI token used in `--log_console` and `--debug` is the vehicle-agnostic `VEH
 
 ```bash
 # Copter (default)
-uav-api --simulated true --log_console VEHICLE ...
+uav-api --simulated --log_console VEHICLE ...
 # console: [COPTER-1] INFO - Sending COMMAND_LONG ...
 
 # Plane
-uav-api --vehicle plane --simulated true --log_console VEHICLE ...
+uav-api --vehicle plane --simulated --log_console VEHICLE ...
 # console: [PLANE-1] INFO - Sending COMMAND_LONG ...
 ```
 
@@ -329,7 +329,7 @@ from uav_api.run_api import spawn_with_args
 
 # Start a simulated UAV API on port 8001
 process = spawn_with_args([
-    "--simulated", "true",
+    "--simulated",
     "--speedup", "5",
     "--port", "8001",
     "--sysid", "1",
@@ -398,7 +398,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--simulated` | `false` | Set to `true` to spawn ArduPilot SITL alongside the API (binary is `ArduCopter` or `ArduPlane` depending on `--vehicle`) |
+| `--simulated` | off | Bare flag; presence spawns ArduPilot SITL alongside the API (binary is `ArduCopter` or `ArduPlane` depending on `--vehicle`). In config files use `simulated = true/false` |
 | `--ardupilot_path` | `None` | Path to local ArduPilot repository. When omitted, `sim_vehicle.py` is resolved from the `PATH` environment variable; when set, SITL is launched from `<ardupilot_path>/Tools/autotest/sim_vehicle.py`. See [Locating ArduPilot](#locating-ardupilot---ardupilot_path). |
 | `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`) |
 | `--speedup` | 1 | SITL simulation time multiplier |
@@ -429,7 +429,7 @@ QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-si
 **Starting the API in UDP/QUIC mode:**
 
 ```bash
-uav-api --udp --simulated true --port 8000 --sysid 1
+uav-api --udp --simulated --port 8000 --sysid 1
 ```
 
 **Consuming the API over HTTP/3 (QUIC):**
@@ -474,7 +474,7 @@ Each POST to `http://<gradys_gs>/update-info/` includes: latitude, longitude, al
 When running in simulated mode, use `--gs_connection` to stream MAVLink telemetry to Mission Planner (or any GCS software):
 
 ```bash
-uav-api --simulated true --sysid 1 --gs_connection [192.168.1.5:14550]
+uav-api --simulated --sysid 1 --gs_connection [192.168.1.5:14550]
 ```
 
 Connect Mission Planner to the specified UDP address to see live position, attitude, and flight data.
@@ -660,7 +660,7 @@ Launched by `uav_api/run_api.py`. All processes below run within its lifetime.
 **MAVLink receiver thread**
 A dedicated daemon thread started by `Vehicle.connect()` — the only line of execution that reads the MAVLink connection. It keeps the latest-by-type message cache fresh, dispatches messages to subscription queues that request handlers wait on, and sends the GCS heartbeat. Stopped by `vehicle.close()` on shutdown, which also unblocks any in-flight waiters.
 
-### Conditional: simulated mode (`--simulated true`)
+### Conditional: simulated mode (`--simulated`)
 
 **ArduPilot SITL process**
 Spawned as `xterm -e sim_vehicle.py -v {ArduCopter|ArduPlane} ...` subprocess (the vehicle binary is chosen by `--vehicle`). Tagged with a unique environment variable (`UAV_SITL_TAG=SITL_ID_<sysid>`). On shutdown, all system processes carrying that tag are killed via `psutil`, ensuring clean teardown even if xterm spawned child processes.
