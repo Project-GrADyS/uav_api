@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Config-file handling fails loudly instead of guessing: a missing or
+  unreadable `--config` path aborts startup (it used to silently run on
+  defaults — on a real drone that presented as "API up, no MAVLink"),
+  malformed INI files abort with the parser error, and unknown section names
+  abort naming the known set (`mode`, `api`, `logs`, `simulated`, `udp`).
+  Unknown keys now warn through the `SYSTEM` logger instead of `print`.
+- `--connection_type` is constrained to `udpin`/`udpout`/`usb`/`tcp`, and its
+  help text documents that `usb` passes `uav_connection` through raw as a
+  serial device path.
 - **BREAKING (CLI):** `--simulated` is now a bare flag (`action='store_true'`),
   consistent with `--headless` and `--udp`. `--simulated true` is rejected by
   argparse; the old form was broken anyway — `type=bool` made `--simulated

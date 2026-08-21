@@ -314,6 +314,8 @@ Only write the keys you actually want to change; omitting a key gives you its de
 
 Boolean keys (`simulated`, `udp`, `headless`) accept `true`/`false`, `yes`/`no`, `on`/`off` or `1`/`0`, in any case. Anything else is rejected at startup rather than guessed at.
 
+The config layer fails loudly instead of guessing: a `--config` path that doesn't exist or can't be read aborts startup (it used to silently fall back to defaults), a malformed INI file aborts with the parser's error, and a section other than `[mode]`, `[api]`, `[logs]`, `[simulated]` or `[udp]` aborts naming the offender. A key that matches no argument is ignored with a warning on the `SYSTEM` logger.
+
 Example config files for single and multi-UAV simulated setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`. For a real drone, start from [`packaging/uav-api.ini.example`](packaging/uav-api.ini.example).
 
 > `ardupilot_path` is optional here too — drop the key to resolve `sim_vehicle.py` from `PATH`.
@@ -392,7 +394,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--connection_type` | `udpin` | `udpin` — API listens; `udpout` — API connects out; `usb` — serial |
+| `--connection_type` | `udpin` | One of `udpin`, `udpout`, `usb`, `tcp`. `udpin` — API listens; `udpout` — API connects out; `tcp` — TCP client; `usb` — `uav_connection` is used raw as a serial device path (e.g. `/dev/ttyACM0`) |
 
 ## Simulation only
 

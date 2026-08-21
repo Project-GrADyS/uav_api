@@ -2,7 +2,12 @@
 import configparser
 import json
 import argparse
+import logging
 import os
+
+# Section names accepted in config files, mirroring the five argument groups
+# below (parse_mode, parse_api, parse_logs, parse_simulated, parse_udp).
+KNOWN_SECTIONS = {"mode", "api", "logs", "simulated", "udp"}
 
 def namespace_to_str(namespace: argparse.Namespace) -> str:
     """Convert argparse.Namespace to a JSON string."""
@@ -22,11 +27,6 @@ def read_args_from_env() -> argparse.Namespace:
     if args_str:
         return str_to_namespace(args_str)
     return None
-
-def parse_config_file(file_path):
-    config = configparser.ConfigParser()
-    config.read(file_path)
-    print(config.sections())
 
 _TRUE_VALUES = {"true", "yes", "on", "1"}
 _FALSE_VALUES = {"false", "no", "off", "0"}
@@ -59,9 +59,22 @@ def parse_args(raw_args=None):
     args = parser.parse_args(raw_args)
 
     if args.config:
-        #parse_config_file(args.config)
         config = configparser.ConfigParser()
-        config.read(args.config)
+        try:
+            read_files = config.read(args.config)
+        except configparser.Error as e:
+            parser.error(f"Malformed config file {args.config}: {e}")
+        # configparser treats a missing or unreadable path as "nothing to
+        # read", which on a real drone presents as "API up, no MAVLink".
+        if not read_files:
+            parser.error(f"Config file not found or unreadable: {args.config}")
+
+        unknown_sections = sorted(set(config.sections()) - KNOWN_SECTIONS)
+        if unknown_sections:
+            parser.error(
+                f"Unknown section(s) {unknown_sections} in {args.config}; "
+                f"known sections: {sorted(KNOWN_SECTIONS)}"
+            )
 
         if "simulated" in config.sections():
             setattr(args, "simulated", True)
@@ -83,7 +96,10 @@ def parse_args(raw_args=None):
                         value = [v.strip() for v in value.strip("[]").split(",") if v.strip()]
                     setattr(args, key, value)
                 else:
-                    print(f"Warning: {key} not found in args")
+                    logging.getLogger("SYSTEM").warning(
+                        f"Config key '{key}' in [{section}] of {args.config} "
+                        "does not match any argument; ignored"
+                    )
     return args
     
 # MODE PARSER
@@ -134,7 +150,10 @@ def parse_api(api_parser):
         '--connection_type',
         dest='connection_type',
         default='udpin',
-        help="Connection type (client or server) for copter. Either udpin or udpout"
+        choices=['udpin', 'udpout', 'usb', 'tcp'],
+        help="Connection scheme for the vehicle link. udpin/udpout/tcp prefix "
+             "uav_connection as '<type>:<address>'; usb passes uav_connection "
+             "through raw as a serial device path (e.g. /dev/ttyACM0)"
     )
 
     api_parser.add_argument(
