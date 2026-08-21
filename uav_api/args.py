@@ -3,7 +3,6 @@ import configparser
 import json
 import argparse
 import os
-import ast
 
 def namespace_to_str(namespace: argparse.Namespace) -> str:
     """Convert argparse.Namespace to a JSON string."""
@@ -218,7 +217,7 @@ def parse_logs(logs_parser):
     # Defines which values are accepted as a LOGGER input.
     def valid_loggers_type(value):
         valid_loggers = {'UVICORN', 'VEHICLE', 'GRADYS_GS', 'SCRIPT'}
-        if not value in valid_loggers:
+        if value not in valid_loggers:
             raise argparse.ArgumentTypeError('Invalid value. Please choose one of the following: value1, value2, or both')
         return value
     

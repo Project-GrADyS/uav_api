@@ -13,7 +13,11 @@ Port 8006 / sysid 6 (see conftest for the allocation table).
 import threading
 import time
 
+import pytest
+
 from conftest import make_api_fixture
+
+pytestmark = [pytest.mark.sitl, pytest.mark.copter]
 
 api = make_api_fixture(8006, 6, flying=True)
 

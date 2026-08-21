@@ -2,9 +2,9 @@ from argparse import Namespace
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from uav_api.vehicles.copter import Copter
-from uav_api.routers.router_dependencies import get_copter_instance, get_args
+from uav_api.routers.dependencies import get_copter_instance, get_args
 
-copter_command_router = APIRouter(
+router = APIRouter(
     prefix = "/command",
     tags = ["command"],
 )
@@ -14,7 +14,7 @@ class Movement(BaseModel):
     long: float
     alt: int
 
-@copter_command_router.get("/arm", tags=["command"])
+@router.get("/arm", tags=["command"])
 def arm(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         uav.change_mode("GUIDED")
@@ -25,7 +25,7 @@ def arm(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(ge
     result = "Armed vehicle" if uav.armed() else "Disarmed vehicle"
     return {"device": "uav", "id": str(args.sysid),"result": result}
 
-@copter_command_router.get("/takeoff", tags=["command"])
+@router.get("/takeoff", tags=["command"])
 def takeoff(alt: int = 15, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         uav.user_takeoff(alt)
@@ -33,19 +33,19 @@ def takeoff(alt: int = 15, uav: Copter = Depends(get_copter_instance), args: Nam
         raise HTTPException(status_code=500, detail=f"TAKEOFFF_COMMAND FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Takeoff successful! Vehicle at {alt} meters"}
 
-@copter_command_router.get("/brake", tags=["command"], summary="Stops the copter immediately (BRAKE mode)")
+@router.get("/brake", tags=["command"], summary="Stops the copter immediately (BRAKE mode)")
 def brake(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     if not uav.change_mode("BRAKE"):
         raise HTTPException(status_code=500, detail="BRAKE_COMMAND FAIL: could not switch to BRAKE mode")
     return {"device": "uav", "id": str(args.sysid), "result": "Copter braking. Use /command/guided to enable movement commands again"}
 
-@copter_command_router.get("/guided", tags=["command"], summary="Switches to GUIDED mode, enabling movement commands")
+@router.get("/guided", tags=["command"], summary="Switches to GUIDED mode, enabling movement commands")
 def guided(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     if not uav.change_mode("GUIDED"):
         raise HTTPException(status_code=500, detail="GUIDED_COMMAND FAIL: could not switch to GUIDED mode")
     return {"device": "uav", "id": str(args.sysid), "result": "Copter in GUIDED mode"}
 
-@copter_command_router.get("/land", tags=["command"])
+@router.get("/land", tags=["command"])
 def land(timeout=60, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         uav.land_and_disarm()
@@ -53,7 +53,7 @@ def land(timeout=60, uav: Copter = Depends(get_copter_instance), args: Namespace
         raise HTTPException(status_code=500, detail=f"LAND_COMMAND FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": "Landed at home successfully"}
 
-@copter_command_router.get("/rtl", tags=["command"])
+@router.get("/rtl", tags=["command"])
 def rlt(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         uav.do_RTL()
@@ -61,7 +61,7 @@ def rlt(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(ge
         raise HTTPException(status_code=500, detail=f"RTL_COMMAND FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": "Landed at home successfully"}
 
-@copter_command_router.get("/set_air_speed", tags=["command"], description=f"Changes copter air speed to specified amount (m/s)")
+@router.get("/set_air_speed", tags=["command"], description="Changes copter air speed to specified amount (m/s)")
 def set_air_speed(new_v: int, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         uav.change_air_speed(new_v)
@@ -69,7 +69,7 @@ def set_air_speed(new_v: int, uav: Copter = Depends(get_copter_instance), args: 
         raise HTTPException(status_code=500, detail=f"CHANGE_AIR_SPEED FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Air speed set to {new_v}m/s"}
 
-@copter_command_router.get("/set_ground_speed", tags=["command"], description=f"Changes copter ground speed to specified amount (m/s)")
+@router.get("/set_ground_speed", tags=["command"], description="Changes copter ground speed to specified amount (m/s)")
 def set_ground_speed(new_v: int, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         uav.change_ground_speed(new_v)
@@ -77,7 +77,7 @@ def set_ground_speed(new_v: int, uav: Copter = Depends(get_copter_instance), arg
         raise HTTPException(status_code=500, detail=f"CHANGE_GROUND_SPEED FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Ground speed set to {new_v}m/s"}
 
-@copter_command_router.get("/set_climb_speed", tags=["command"], description=f"Changes copter climb speed to specified amount (m/s)")
+@router.get("/set_climb_speed", tags=["command"], description="Changes copter climb speed to specified amount (m/s)")
 def set_climb_speed(new_v: int, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         uav.change_climb_speed(new_v)
@@ -85,7 +85,7 @@ def set_climb_speed(new_v: int, uav: Copter = Depends(get_copter_instance), args
         raise HTTPException(status_code=500, detail=f"CHANGE_CLIMB_SPEED FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Climb speed set to {new_v}m/s"}
 
-@copter_command_router.get("/set_descent_speed", tags=["command"], description=f"Changes copter descent speed to specified amount (m/s)")
+@router.get("/set_descent_speed", tags=["command"], description="Changes copter descent speed to specified amount (m/s)")
 def set_descent_speed(new_v: int, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         uav.change_descent_speed(new_v)
@@ -93,7 +93,7 @@ def set_descent_speed(new_v: int, uav: Copter = Depends(get_copter_instance), ar
         raise HTTPException(status_code=500, detail=f"CHANGE_DESCENT_SPEED FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Descent speed set to {new_v}m/s"}
 
-@copter_command_router.get("/set_sim_speedup", tags=["command"], description=f"Changes copter simulation speedup factor")
+@router.get("/set_sim_speedup", tags=["command"], description="Changes copter simulation speedup factor")
 def set_sim_speedup(sim_factor: float, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         uav.set_parameter("SIM_SPEEDUP", sim_factor)
@@ -101,10 +101,10 @@ def set_sim_speedup(sim_factor: float, uav: Copter = Depends(get_copter_instance
         raise HTTPException(status_code=500, detail=f"CHANGE_SIM_SPEEDUP FAIL: {e}")
     return {"device": "uav", "id": str(args.sysid), "result": f"Simulation speedup set to {sim_factor}x"}
 
-@copter_command_router.get("/set_home", tags=["command"], description="Changes the copter HOME location")
+@router.get("/set_home", tags=["command"], description="Changes the copter HOME location")
 def set_home(uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
     try:
         uav.set_home()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"SET_HOME_LOCATION FAIL: {e}")
-    return {"device": "uav", "id": str(args.sysid), "result": f"Home location set successfully!"}
+    return {"device": "uav", "id": str(args.sysid), "result": "Home location set successfully!"}

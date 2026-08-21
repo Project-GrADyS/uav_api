@@ -80,5 +80,5 @@ The async drain loop (`lifespan.py:153`) continuously reads MAVLink messages so 
 ## Related docs
 
 - [`api-specification.md`](api-specification.md) — the endpoint contract these conventions apply to.
-- [`plane-support.md`](plane-support.md) — where plane (beta) behaviour diverges from copter.
+- [`plane-support.md`](plane-support.md) — where plane behaviour diverges from copter.
 - [README — Getting Started](../README.md#getting-started) — how to start the API in simulated or real mode.

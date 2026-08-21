@@ -10,7 +10,11 @@ Tests halt the drone with a zero-velocity setpoint before finishing.
 
 import time
 
+import pytest
+
 from conftest import make_api_fixture
+
+pytestmark = [pytest.mark.sitl, pytest.mark.copter]
 
 api = make_api_fixture(port=8003, sysid=3, flying=True)
 

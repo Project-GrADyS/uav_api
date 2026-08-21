@@ -8,11 +8,20 @@ other files. Modules must run sequentially: every SITL instance shares the
 same working directory (~/uav_api_logs/ardupilot_logs).
 
 Port/sysid allocation:
-    command_test      8001 / 1
-    mission_test      8002 / 2
-    movement_test     8003 / 3
-    peripherical_test 8004 / 4
-    telemetry_test    8005 / 5
+    copter_command_test    8001 / 1
+    mission_test           8002 / 2
+    copter_movement_test   8003 / 3
+    peripherical_test      8004 / 4
+    copter_telemetry_test  8005 / 5
+    concurrency_test       8006 / 6
+    plane_command_test     8007 / 7
+    plane_movement_test    8008 / 8
+    plane_telemetry_test   8009 / 9
+
+All modules in this directory spawn SITL and are marked with the `sitl`
+marker, plus `copter` or `plane` for their vehicle (mission, peripherical
+and concurrency run on a copter app and carry the copter marker). The unit
+layer in tests/unit/ runs anywhere with `pytest -m "not sitl"`.
 
 Requirements:
     - ArduPilot installed with sim_vehicle.py on PATH (or pass --ardupilot_path)
@@ -93,6 +102,18 @@ def wait_for_altitude(client, target_alt, tolerance=2, timeout=60):
     raise TimeoutError(f"Altitude did not reach {target_alt}m within {timeout}s")
 
 
+def wait_for_relative_alt(client, min_alt, timeout=60):
+    """Wait until GPS relative altitude reaches min_alt (plane has no /telemetry/ned)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        r = client.get("/telemetry/gps")
+        if r.status_code == 200:
+            if r.json()["info"]["position"]["relative_alt"] >= min_alt:
+                return
+        time.sleep(1)
+    raise TimeoutError(f"Relative altitude did not reach {min_alt}m within {timeout}s")
+
+
 # ── SITL/API lifecycle ────────────────────────────────────────────────────────
 
 def _kill_stray_sitl(sysid):
@@ -108,7 +129,7 @@ def _kill_stray_sitl(sysid):
             continue
 
 
-def start_api(port, sysid, flying=False):
+def start_api(port, sysid, flying=False, vehicle="copter"):
     _kill_stray_sitl(sysid)
     # Parameters written by a previous run (e.g. SIM_SPEEDUP) persist in the
     # shared eeprom and silently override the --speedup we pass.
@@ -123,11 +144,21 @@ def start_api(port, sysid, flying=False):
         "--port", str(port),
         "--sysid", str(sysid),
         "--uav_connection", f"127.0.0.1:{17170 + sysid}",
+        "--vehicle", vehicle,
     ])
     client = Client(port)
     try:
         wait_for_api(client, proc)
-        if flying:
+        if flying and vehicle == "plane":
+            # Fixed-wing: hovering is impossible; "flying" means airborne at
+            # cruise altitude in GUIDED. Client timeouts exceed the endpoints'
+            # internal ones (arm 120, takeoff 120).
+            r = client.get("/command/arm", timeout=150)
+            assert r.status_code == 200, f"Arm failed: {r.text}"
+            r = client.get("/command/takeoff", params={"alt": 50}, timeout=180)
+            assert r.status_code == 200, f"Takeoff failed: {r.text}"
+            wait_for_relative_alt(client, 35)
+        elif flying:
             r = client.get("/command/arm", timeout=60)
             assert r.status_code == 200, f"Arm failed: {r.text}"
             r = client.get("/command/takeoff", params={"alt": 15}, timeout=60)
@@ -149,13 +180,14 @@ def stop_api(proc, sysid):
         _kill_stray_sitl(sysid)
 
 
-def make_api_fixture(port, sysid, flying=False):
+def make_api_fixture(port, sysid, flying=False, vehicle="copter"):
     """Build a module-scoped fixture that yields a Client for a fresh
-    SITL-backed API server (armed and hovering at 15 m when flying=True)."""
+    SITL-backed API server. flying=True arms and takes off first (copter
+    hovers at 15 m; plane climbs to 50 m and cruises in GUIDED)."""
 
     @pytest.fixture(scope="module")
     def api(request):
-        proc, client = start_api(port, sysid, flying)
+        proc, client = start_api(port, sysid, flying, vehicle)
         yield client
         stop_api(proc, sysid)
 

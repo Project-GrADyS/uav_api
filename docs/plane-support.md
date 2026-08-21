@@ -1,6 +1,6 @@
-# Plane Support (beta)
+# Plane Support
 
-> ⚠️ **Beta.** Plane support is functional for the common operator path (arm → takeoff → goto → land/RTL) but is not yet integration-tested and several copter endpoints have no plane counterpart. Treat as preview.
+> Plane support covers the common operator path (arm → takeoff → goto → land/RTL) and is exercised by unit tests (`tests/unit/plane_*_unit_test.py`) and SITL integration modules (`tests/plane_*_test.py`). Several copter endpoints intentionally have no plane counterpart — see the status table below.
 
 ArduPlane / QuadPlane support runs side-by-side with the original Copter path. The selection is made once at startup via `--vehicle {copter|plane}` (default `copter`) and decides which routers register and which ArduPilot SITL spawns. Consumer URLs (`/command/*`, `/movement/*`, `/telemetry/*`) keep the same prefixes regardless, so `gradys-embedded` and `gradys-gs` do not need to know which vehicle is on the other side.
 
@@ -26,7 +26,7 @@ For copter (default) endpoint contracts see [`api-specification.md`](api-specifi
 | `/command/takeoff` `pitch_deg` query param | Currently a no-op for fixed-wing. ArduPlane drives climb attitude from `TKOFF_LVL_PITCH` / `PTCH_LIM_MAX_DEG` params, not from the NAV_TAKEOFF p1 value. Kept in the signature for API stability. |
 | `/movement/go_to_ned`, `/drive`, `/travel_at_ned`, `/set_heading`, `/set_yaw_rate`, `/resume` | **Not implemented** for plane mode. |
 | `Plane.set_attitude()` (SET_ATTITUDE_TARGET) | Implemented in the class; no router exposes it yet. |
-| Integration tests | None — `tests/` runs Copter only. |
+| Integration tests | `tests/plane_command_test.py`, `tests/plane_movement_test.py`, `tests/plane_telemetry_test.py` (SITL) plus `tests/unit/plane_*_unit_test.py` (mocked vehicle). Select with `pytest -m plane`. |
 
 ---
 
@@ -37,10 +37,10 @@ For copter (default) endpoint contracts see [`api-specification.md`](api-specifi
 | `uav_api/vehicles/vehicle.py` | `class Vehicle` — shared base: MAVLink connection, single receiver thread, subscriptions, common commands/waits. |
 | `uav_api/vehicles/plane.py` | `class Plane(Vehicle)` — plane-specific behavior. Logger named `"PLANE"`. |
 | `uav_api/vehicles/copter.py` | `class Copter(Vehicle)` — copter-specific behavior. |
-| `uav_api/routers/plane_command.py` | `arm`, `disarm`, `takeoff`, `land`, `land_at`, `rtl`, `set_home`. |
-| `uav_api/routers/plane_movement.py` | `go_to_gps`, `go_to_gps_wait`, `stop`. |
-| `uav_api/routers/plane_telemetry.py` | `general`, `gps`, `battery_info`, `sensor_status`, `error_info`, `home_info`. |
-| `uav_api/routers/router_dependencies.py` | `get_copter_instance` and `get_plane_instance` lazy singletons. |
+| `uav_api/routers/plane/command.py` | `arm`, `disarm`, `takeoff`, `land`, `land_at`, `rtl`, `set_home`. |
+| `uav_api/routers/plane/movement.py` | `go_to_gps`, `go_to_gps_wait`, `stop`. |
+| `uav_api/routers/plane/telemetry.py` | `general`, `gps`, `battery_info`, `sensor_status`, `error_info`, `home_info`. |
+| `uav_api/routers/dependencies.py` | Vehicle singletons: `init_copter`/`init_plane` build them in the lifespan; `get_copter_instance`/`get_plane_instance` serve them to routers. |
 | `uav_api/classes/attitude.py` | `Attitude_target` Pydantic model (unused by routers today; reserved for future `/movement/set_attitude`). |
 
 ---
@@ -52,28 +52,28 @@ For copter (default) endpoint contracts see [`api-specification.md`](api-specifi
 Inside `lifespan.py:lifespan`:
 
 1. **SITL spawn** (`start_sitl` in `lifespan.py:85`) — `ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"`, then `xterm -e sim_vehicle.py -v {ardupilot_vehicle} -I {sysid} …` (the `xterm -e` prefix is dropped under `--headless`).
-2. **Singleton selection** (`lifespan.py:147-150`):
+2. **Singleton construction** (in `lifespan.py`):
    ```python
    if args.vehicle == "plane":
-       vehicle = get_plane_instance(args.sysid, conn)
+       vehicle = init_plane(args.sysid, conn)
    else:
-       vehicle = get_copter_instance(args.sysid, conn)
+       vehicle = init_copter(args.sysid, conn)
    ```
 3. **Drain loop + Gradys GS task** receive `vehicle` and duck-type on `.get_gps_info()` / `.target_system`, which both classes expose.
 
-In `api_app.py` (around line 44):
+In `api_app.py`'s `create_app()`:
 
 ```python
 if args.vehicle == "plane":
-    app.include_router(plane_command_router)
-    app.include_router(plane_movement_router)
-    app.include_router(plane_telemetry_router)
+    app.include_router(plane_command.router)
+    app.include_router(plane_movement.router)
+    app.include_router(plane_telemetry.router)
 else:
-    app.include_router(command_router)
-    app.include_router(telemetry_router)
-    app.include_router(movement_router)
-    app.include_router(mission_router)
-    app.include_router(peripherical_router)
+    app.include_router(copter_command.router)
+    app.include_router(copter_telemetry.router)
+    app.include_router(copter_movement.router)
+    app.include_router(mission.router)
+    app.include_router(peripherical.router)
 ```
 
 Routers are mutually exclusive — only the matching set is mounted. This is why `/mission/*` returns 404 in plane mode.

@@ -17,13 +17,13 @@ from flight_helpers import (
 SLEEP_TIME = 5
 
 
-def make_polygon_trajectory(r, l):
+def make_polygon_trajectory(r, sides):
     vectors = []
-    for n in range(l):
+    for n in range(sides):
         vector = {
-            "x": round(r * math.sin((n + 1) * 2 * math.pi / l) - r * math.sin(n * 2 * math.pi / l)),
+            "x": round(r * math.sin((n + 1) * 2 * math.pi / sides) - r * math.sin(n * 2 * math.pi / sides)),
             "y": 0,
-            "z": -(round(r * math.cos((n + 1) * 2 * math.pi / l) - r * math.cos(n * 2 * math.pi / l)))
+            "z": -(round(r * math.cos((n + 1) * 2 * math.pi / sides) - r * math.cos(n * 2 * math.pi / sides)))
         }
         print(f"polygon vector {n}: {vector}")
         vectors.append(vector)
@@ -45,12 +45,12 @@ setup_graceful_shutdown(session, base_url)
 
 # Ensures that the user defines a valid regular polygon
 if 1 in args.sides or 2 in args.sides:
-    print(f"Error: Polygon must have more than two sides!")
+    print("Error: Polygon must have more than two sides!")
     exit()
 
 # Failsafe: Ensure that the radius is smaller than the height of the perimeter's center
 if args.radius >= args.height:
-    print(f"Error: height vale must be higher then the radius value!")
+    print("Error: height vale must be higher then the radius value!")
     exit()
 
 # Arming vehicle
@@ -76,17 +76,17 @@ print(f"center point: {center_pos}")
 
 # Failsafe: Ensures the drone has reached the desired altitude, including a margin of error, if not it will land
 if abs(center_pos["z"]-home["z"]) >= args.height+2 or abs(center_pos["z"]-home["z"]) <= args.height-2:
-        print(f"Error: Vehicle did not reach the desired height.")
+        print("Error: Vehicle did not reach the desired height.")
         send_command(session, base_url, "/command/land")
         print("Vehicle landed.")
         exit()
 
 polygon_list = args.sides
-for l in polygon_list:
-    print(f"\n ---polygon {l}---------------------------------- \n")
+for sides in polygon_list:
+    print(f"\n ---polygon {sides}---------------------------------- \n")
 
     # For each polygon gets the NED trajectory vectors to the vertices
-    polygon_trajectory = make_polygon_trajectory(args.radius, l)
+    polygon_trajectory = make_polygon_trajectory(args.radius, sides)
 
     # Moving
     for vector in polygon_trajectory:
@@ -104,12 +104,12 @@ for l in polygon_list:
 
     # After completing the polygon, return the vehicle to the center using go_to_ned_wait
     send_command(session, base_url, "/movement/go_to_ned_wait", params=center_pos, method="POST")
-    print(f"\nVehicle going back to the center")
+    print("\nVehicle going back to the center")
 
     #sleep ensures the vehicle has time to reach its desired position
     sleep(SLEEP_TIME)
 
-    print(f"Vehicle at the center")
+    print("Vehicle at the center")
 
 # Landing
 send_command(session, base_url, "/command/land")

@@ -236,13 +236,22 @@ class Plane(Vehicle):
         )
 
     def go_to_gps_wait(self, lat: float, long: float, alt: float,
-                       accuracy: float = 50.0, height_accuracy: float = 10.0,
+                       accuracy: float = 120.0, height_accuracy: float = 10.0,
                        timeout: int = 180):
-        """go_to_gps() + block until the plane arrives at the target."""
+        """go_to_gps() + block until the plane arrives at the target.
+
+        accuracy defaults to 2x the default WP_LOITER_RAD (60 m): on arrival a
+        fixed-wing loiters around the target, so its distance to it never
+        drops below the loiter radius plus the entry overshoot — 50 m was
+        unreachable and timed out on every call.
+        """
         self.go_to_gps(lat, long, alt)
+        # wait_location's height check compares absolute (AMSL) altitude,
+        # while alt is home-relative (MAV_FRAME_GLOBAL_RELATIVE_ALT).
+        target_alt_amsl = self.get_home_position()["altitude"] / 1000.0 + alt
         self.wait_location(self.mav_location(lat, long, alt),
                            accuracy=accuracy,
-                           target_altitude=alt,
+                           target_altitude=target_alt_amsl,
                            height_accuracy=height_accuracy,
                            timeout=timeout)
 

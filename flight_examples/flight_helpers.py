@@ -1,7 +1,6 @@
 import math
 import time
 import sys
-import argparse
 
 
 def add_common_args(parser):

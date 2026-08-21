@@ -36,12 +36,12 @@ args = parser.parse_args()
 
 # Ensures that the user defines a valid regular polygon
 if 1 in args.sides or 2 in args.sides:
-    print(f"Error: Polygon must have more than two sides!")
+    print("Error: Polygon must have more than two sides!")
     exit()
 
 # Failsafe: Ensure that the radius is smaller than the height of the perimeter's center
 if args.radius >= args.height:
-    print(f"Error: height vale must be higher then the radius value!")
+    print("Error: height vale must be higher then the radius value!")
     exit()
 
 base_url = get_base_url(args)
@@ -71,7 +71,7 @@ print(f"center point: {center_pos}")
 
 # Failsafe: Ensures the drone has reached the desired altitude, including a margin of error, if not it will land
 if abs(center_pos["z"]-initial_pos["z"]) >= args.height+2 or abs(center_pos["z"]-initial_pos["z"]) <= args.height-2:
-        print(f"Error: Vehicle did not reach the desired height.")
+        print("Error: Vehicle did not reach the desired height.")
         send_command(session, base_url, "/command/land")
         print("Vehicle landed.")
         exit()
@@ -98,12 +98,12 @@ for s in polygon_list:
 
     # After completing the polygon, return the vehicle to the center using go_to_ned_wait
     send_command(session, base_url, "/movement/go_to_ned_wait", params=center_pos, method="POST")
-    print(f"\nVehicle going back to the center")
+    print("\nVehicle going back to the center")
 
     #sleep ensures the vehicle has time to reach its desired position
     sleep(SLEEP_TIME)
 
-    print(f"Vehicle at the center")
+    print("Vehicle at the center")
 
 # Landing
 send_command(session, base_url, "/command/land")

@@ -1,16 +1,16 @@
 from argparse import Namespace
 from fastapi import APIRouter, Depends, HTTPException
 from uav_api.vehicles.plane import Plane
-from uav_api.routers.router_dependencies import get_plane_instance, get_args
+from uav_api.routers.dependencies import get_plane_instance, get_args
 from uav_api.classes.movement import Gps_pos
 
-plane_movement_router = APIRouter(
+router = APIRouter(
     prefix="/movement",
     tags=["movement"],
 )
 
 
-@plane_movement_router.post("/go_to_gps", tags=["movement"], summary="Sends the plane to the specified GPS position (fire-and-forget DO_REPOSITION)")
+@router.post("/go_to_gps", tags=["movement"], summary="Sends the plane to the specified GPS position (fire-and-forget DO_REPOSITION)")
 def go_to_gps(pos: Gps_pos,
               uav: Plane = Depends(get_plane_instance),
               args: Namespace = Depends(get_args)):
@@ -22,7 +22,7 @@ def go_to_gps(pos: Gps_pos,
             "result": f"Going to coord ({pos.lat}, {pos.long}, {pos.alt})"}
 
 
-@plane_movement_router.post("/go_to_gps_wait", tags=["movement"], summary="Sends the plane to the specified GPS position and blocks until arrival")
+@router.post("/go_to_gps_wait", tags=["movement"], summary="Sends the plane to the specified GPS position and blocks until arrival")
 def go_to_gps_wait(pos: Gps_pos,
                    uav: Plane = Depends(get_plane_instance),
                    args: Namespace = Depends(get_args)):
@@ -34,7 +34,7 @@ def go_to_gps_wait(pos: Gps_pos,
             "result": f"Arrived at coord ({pos.lat}, {pos.long}, {pos.alt})"}
 
 
-@plane_movement_router.get("/stop", tags=["movement"], summary="Closest analog of stop for fixed-wing: enter LOITER at current position")
+@router.get("/stop", tags=["movement"], summary="Closest analog of stop for fixed-wing: enter LOITER at current position")
 def stop(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         uav.stop()

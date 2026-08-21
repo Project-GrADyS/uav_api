@@ -1,9 +1,9 @@
 # UAV API
 
-HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones via MAVLink and simulated drones via ArduPilot SITL. Plane support is in beta — see [Vehicle Types](#vehicle-types) below.
+HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones via MAVLink and simulated drones via ArduPilot SITL. Supports ArduCopter and ArduPlane — see [Vehicle Types](#vehicle-types) below.
 
 **Features:**
-- Multi-vehicle: ArduCopter (stable) and ArduPlane (beta), selected at startup via `--vehicle`
+- Multi-vehicle: ArduCopter and ArduPlane, selected at startup via `--vehicle`
 - Full flight control: arm, takeoff, land, RTL, speed configuration
 - GPS and NED movement commands (fire-and-forget and blocking variants), heading control
 - Rich telemetry: GPS, NED position, compass, battery, sensor health
@@ -59,6 +59,11 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
   - [Make polygon with Drive](#make-polygon-with-drive)
   - [Delivery Mission Simulation](#delivery-mission-simulation)
   - [GPS-Based Follower](#gps-based-follower)
+- [Testing](#testing)
+  - [Setup](#setup)
+  - [Unit tests (run anywhere)](#unit-tests-run-anywhere)
+  - [SITL integration tests (local only)](#sitl-integration-tests-local-only)
+  - [Lint](#lint)
 
 ---
 
@@ -71,7 +76,7 @@ example clients. Reference material lives under [`docs/`](docs/):
 |----------|----------|
 | [`docs/api-specification.md`](docs/api-specification.md) | **The HTTP contract.** Every endpoint's path, query/body schema and response shape. This is what the GrADyS ecosystem codes against — update it before changing an endpoint. |
 | [`docs/coordinate-frames.md`](docs/coordinate-frames.md) | GPS vs NED vs NED-velocity, why `z` is negative for altitude, and common MAVLink pitfalls. Read before writing movement logic. |
-| [`docs/plane-support.md`](docs/plane-support.md) | Plane (beta) endpoint reference and how its behaviour differs from copter. |
+| [`docs/plane-support.md`](docs/plane-support.md) | Plane endpoint reference and how its behaviour differs from copter. |
 | [`docs/deployment.md`](docs/deployment.md) | Running the API as a systemd service on a companion computer, and fleet provisioning. |
 
 ---
@@ -242,10 +247,10 @@ The API supports two ArduPilot vehicles, selected at startup with `--vehicle`:
 
 | Vehicle | Flag | Status |
 |---------|------|--------|
-| ArduCopter (QuadCopter) | `--vehicle copter` *(default)* | Stable — full router surface, integration tests pass. |
-| ArduPlane / QuadPlane | `--vehicle plane` | **Beta** |
+| ArduCopter (QuadCopter) | `--vehicle copter` *(default)* | Stable — full router surface; unit + SITL integration tests pass. |
+| ArduPlane / QuadPlane | `--vehicle plane` | Stable — smaller endpoint surface than copter; unit + SITL integration tests pass. |
 
-> ⚠️ **Beta**: Plane support is in beta — some functionalities may not work as intended. The plane endpoint surface is intentionally smaller than copter (no `/mission/*`, no `/peripherical/*`, fewer movement endpoints) and there are no integration tests yet. Treat as preview. Full details in [`docs/plane-support.md`](docs/plane-support.md).
+> **Note**: The plane endpoint surface is intentionally smaller than copter (no `/mission/*`, no `/peripherical/*`, fewer movement endpoints). Covered by unit tests (`tests/unit/plane_*_unit_test.py`) and SITL integration modules (`tests/plane_*_test.py`). Full details in [`docs/plane-support.md`](docs/plane-support.md).
 
 **Run as plane in simulation:**
 
@@ -270,7 +275,7 @@ The CLI token used in `--log_console` and `--debug` is the vehicle-agnostic `VEH
 uav-api --simulated true --log_console VEHICLE ...
 # console: [COPTER-1] INFO - Sending COMMAND_LONG ...
 
-# Plane (beta)
+# Plane
 uav-api --vehicle plane --simulated true --log_console VEHICLE ...
 # console: [PLANE-1] INFO - Sending COMMAND_LONG ...
 ```
@@ -375,7 +380,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--config` | None | Path to INI config file (`[api]`, `[simulated]`, `[logs]` sections) |
-| `--vehicle` | `copter` | `copter` (default) or `plane` (beta). Selects which routers register and which ArduPilot SITL spawns. See [Vehicle Types](#vehicle-types). |
+| `--vehicle` | `copter` | `copter` (default) or `plane`. Selects which routers register and which ArduPilot SITL spawns. See [Vehicle Types](#vehicle-types). |
 | `--port` | 8000 | HTTP port the API listens on |
 | `--sysid` | 10 | MAVLink system ID; must match the drone's `SYSID_THISMAV` parameter |
 | `--uav_connection` | `127.0.0.1:17171` | MAVLink address — `host:port` for UDP, or serial device path for USB |
@@ -622,18 +627,18 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | `uav_api/vehicles/copter.py` | `Copter(Vehicle)` — copter-specific GUIDED commands and movement |
 | `uav_api/vehicles/plane.py` | `Plane(Vehicle)` — TAKEOFF-mode takeoff, loiter, QuadPlane helpers |
 | `uav_api/args.py` | CLI argument parsing; config serialized to `UAV_ARGS` env var |
-| `uav_api/routers/router_dependencies.py` | Lazy singletons `get_copter_instance` / `get_plane_instance` + `args` via `Depends()` |
+| `uav_api/routers/dependencies.py` | Vehicle/args singletons — `init_copter`/`init_plane` build them in the lifespan; `get_copter_instance` / `get_plane_instance` / `get_args` serve them via `Depends()` |
 | `uav_api/gradys_gs.py` | Async coroutine that POSTs GPS location to Gradys GS every second |
 | `uav_api/log.py` | Logger configuration; routes `VEHICLE` token to `COPTER`/`PLANE` logger based on `--vehicle` |
 | `uav_api/setup.py` | Idempotent startup setup — creates the scripts, script-log and log directories (defaulted or configured) plus the ArduPilot locations file |
-| `uav_api/routers/copter_command.py` | Copter endpoints: arm, takeoff, land, RTL, speed, home |
-| `uav_api/routers/copter_movement.py` | Copter endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
-| `uav_api/routers/copter_telemetry.py` | Copter endpoints: GPS, NED, compass, battery, sensor status, home info |
-| `uav_api/routers/copter_mission.py` | Copter endpoints: upload-script, list-scripts, execute-script, running-scripts, stop-script, clear-scripts |
-| `uav_api/routers/copter_peripherical.py` | Copter endpoints: take_photo, servo_output |
-| `uav_api/routers/plane_command.py` | Plane endpoints (beta): arm, disarm, takeoff, land, land_at, RTL, set_home |
-| `uav_api/routers/plane_movement.py` | Plane endpoints (beta): go_to_gps, go_to_gps_wait, stop |
-| `uav_api/routers/plane_telemetry.py` | Plane endpoints (beta): general, GPS, battery, sensor status, error, home info |
+| `uav_api/routers/copter/command.py` | Copter endpoints: arm, takeoff, land, RTL, speed, home |
+| `uav_api/routers/copter/movement.py` | Copter endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
+| `uav_api/routers/copter/telemetry.py` | Copter endpoints: GPS, NED, compass, battery, sensor status, home info |
+| `uav_api/routers/plane/command.py` | Plane endpoints: arm, disarm, takeoff, land, land_at, RTL, set_home |
+| `uav_api/routers/plane/movement.py` | Plane endpoints: go_to_gps, go_to_gps_wait, stop |
+| `uav_api/routers/plane/telemetry.py` | Plane endpoints: general, GPS, battery, sensor status, error, home info |
+| `uav_api/routers/common/mission.py` | Vehicle-agnostic endpoints (registered for copter): upload-script, list-scripts, execute-script, running-scripts, stop-script, clear-scripts |
+| `uav_api/routers/common/peripherical.py` | Peripheral endpoints (registered for copter): take_photo, servo_output |
 | `uav_api/classes/movement.py` | Pydantic models: `Gps_pos`, `Local_pos`, `Local_velocity` |
 | `uav_api/classes/peripherical.py` | Pydantic model: `Servo_output` |
 | `uav_api/classes/attitude.py` | Pydantic model: `Attitude_target` (used internally by `Plane.set_attitude()`) |
@@ -667,7 +672,7 @@ An `asyncio` task running `send_location_to_gradys_gs()` (defined in `uav_api/gr
 
 ## Dependency Injection
 
-Module-level singletons in `uav_api/routers/router_dependencies.py` hold one `Copter`, one `Plane`, and one parsed `args` namespace. Routers pick the right one via FastAPI's `Depends()`:
+Module-level singletons in `uav_api/routers/dependencies.py` hold one `Copter`, one `Plane`, and one parsed `args` namespace (built in the lifespan via `init_copter`/`init_plane`). Routers pick the right one via FastAPI's `Depends()`:
 
 ```python
 Depends(get_copter_instance)  # shared Copter (copter routers; one MAVLink connection)
@@ -1402,4 +1407,101 @@ if __name__ == "__main__":
     while True:
         loop(follower_session, follower_base_url,
              leader_session, leader_base_url, home_alt, leader_home_alt, args)
+```
+
+---
+
+# Testing
+
+The test suite has two layers:
+
+| Layer | Location | Needs | Command |
+|-------|----------|-------|---------|
+| Unit tests | `tests/unit/` | nothing beyond the dev extra | `pytest -m "not sitl"` |
+| SITL integration tests | `tests/*_test.py` | ArduPilot + tmux | `pytest tests/<module>_test.py` |
+
+Three registered markers select subsets (`--strict-markers` is on):
+
+- `sitl` — spawns ArduPilot SITL; deselect with `-m "not sitl"` to run anywhere
+- `copter` / `plane` — vehicle-specific tests; combine freely, e.g.:
+
+```bash
+pytest -m "copter and not sitl"   # copter unit tests only
+pytest -m plane                   # every plane test (unit + SITL)
+pytest -m "sitl and plane"        # plane SITL modules only
+```
+
+Vehicle-neutral tests (the app factory) carry no vehicle marker; the common
+mission/peripherical routers run on a copter app and carry the copter marker.
+
+## Setup
+
+Install the package with the development extra (adds `pytest`, `requests`,
+`httpx` and `ruff`):
+
+```bash
+pip install -e .[dev]
+```
+
+## Unit tests (run anywhere)
+
+The unit layer builds the FastAPI app with `create_app()` and a mocked
+vehicle — no SITL, no MAVLink, no tmux — and pins the HTTP contract of every
+router (copter and plane), including the MAVLink unit conversions in the
+telemetry handlers and the mission-script lifecycle:
+
+```bash
+pytest -m "not sitl"
+```
+
+This is what CI runs on every pull request (see
+`.github/workflows/ci.yml`), together with `ruff check .`.
+
+## SITL integration tests (local only)
+
+Every module directly under `tests/` spawns a real SITL-backed API server
+(marked with the `sitl` pytest marker). Prerequisites:
+
+- ArduPilot installed with `sim_vehicle.py` on `PATH` (or pass
+  `--ardupilot_path`) — see [Prerequisites](#prerequisites)
+- `tmux` (used by the mission router)
+
+Modules must run **sequentially** — every SITL instance shares the same
+working directory (`~/uav_api_logs/ardupilot_logs`) — so run them one at a
+time, never with `pytest-xdist`:
+
+```bash
+pytest tests/copter_command_test.py
+pytest tests/mission_test.py
+pytest tests/copter_movement_test.py
+pytest tests/peripherical_test.py
+pytest tests/copter_telemetry_test.py
+pytest tests/concurrency_test.py
+pytest tests/plane_command_test.py
+pytest tests/plane_movement_test.py
+pytest tests/plane_telemetry_test.py
+```
+
+Each module owns a fixed port/sysid so state cannot leak between modules:
+
+| Module | Port | Sysid | Vehicle |
+|--------|------|-------|---------|
+| `copter_command_test` | 8001 | 1 | copter |
+| `mission_test` | 8002 | 2 | copter |
+| `copter_movement_test` | 8003 | 3 | copter |
+| `peripherical_test` | 8004 | 4 | copter |
+| `copter_telemetry_test` | 8005 | 5 | copter |
+| `concurrency_test` | 8006 | 6 | copter |
+| `plane_command_test` | 8007 | 7 | plane |
+| `plane_movement_test` | 8008 | 8 | plane |
+| `plane_telemetry_test` | 8009 | 9 | plane |
+
+SITL runs headless; if a module fails, SITL output is in
+`~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` and the API log is in
+`~/uav_api_logs/uav_logs/uav_<sysid>.log`.
+
+## Lint
+
+```bash
+ruff check .
 ```

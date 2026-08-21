@@ -51,7 +51,7 @@ async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
                 location = uav.get_gps_info()
                 general_info = uav.get_general_info()
                 battery_info = uav.get_battery_info()
-            except Exception as e:
+            except Exception:
                 _logger.warning("Failed to fetch location")
                 continue
             _logger.info(f"Location fetched: alt={location.alt}, lat={location.lat}, lng={location.lon}")

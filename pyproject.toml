@@ -35,8 +35,33 @@ dependencies = [
     'python-multipart>=0.0.6'
 ]
 
+[project.optional-dependencies]
+dev = [
+    'pytest>=8.0',
+    'requests>=2.31',
+    'httpx>=0.27',
+    'psutil>=5.9.0',
+    'ruff>=0.6',
+]
+
 [project.urls]
 "Homepage" = "https://github.com/Project-GrADyS/uav_api"
 
 [project.scripts]
 uav-api = "uav_api.run_api:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = [
+    "sitl: integration test that spawns ArduPilot SITL; requires sim_vehicle.py, tmux and a local environment. Deselect with -m 'not sitl'.",
+    "copter: test that exercises the copter vehicle/app. Run only copter tests with -m copter.",
+    "plane: test that exercises the plane vehicle/app. Run only plane tests with -m plane.",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

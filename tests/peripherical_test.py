@@ -9,7 +9,11 @@ only the validation paths (disallowed commands, invalid resolution, missing
 required parameters).
 """
 
+import pytest
+
 from conftest import make_api_fixture
+
+pytestmark = [pytest.mark.sitl, pytest.mark.copter]
 
 api = make_api_fixture(port=8004, sysid=4, flying=False)
 

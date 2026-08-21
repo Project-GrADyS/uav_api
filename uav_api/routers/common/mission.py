@@ -6,16 +6,16 @@ import os
 
 from datetime import datetime
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, UploadFile, File, HTTPException, Depends
-from uav_api.routers.router_dependencies import get_args, get_scripts_table
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from uav_api.routers.dependencies import get_args, get_scripts_table
 from uav_api.classes.script import Script
 
-copter_mission_router = APIRouter(
+router = APIRouter(
     prefix = "/mission",
     tags = ["mission"],
 )
 
-@copter_mission_router.post("/upload-script", tags=["mission"], summary="Uploads a mission script (.py file) to the UAV scripts directory")
+@router.post("/upload-script", tags=["mission"], summary="Uploads a mission script (.py file) to the UAV scripts directory")
 async def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
     # 1. Validate file extension
     if not (file.filename.endswith(".py") or file.filename.endswith(".sh")):
@@ -41,7 +41,7 @@ async def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
 
     return {"device": "uav", "id": str(args.sysid), "type": 44, "info": f"Mission File '{safe_filename}' saved at {target_path} successfully."}
 
-@copter_mission_router.get("/list-scripts", tags=["mission"], summary="Lists all uploaded mission scripts")
+@router.get("/list-scripts", tags=["mission"], summary="Lists all uploaded mission scripts")
 def list_scripts(args = Depends(get_args)):
     try:
         scripts = [f.name for f in (Path(args.scripts_path).expanduser()).glob("*.py") if f.is_file()]
@@ -50,7 +50,7 @@ def list_scripts(args = Depends(get_args)):
 
     return {"device": "uav", "id": str(args.sysid), "type": 42, "scripts": scripts}
 
-@copter_mission_router.post("/execute-script/", tags=["mission"], summary="Executes a specified mission script")
+@router.post("/execute-script/", tags=["mission"], summary="Executes a specified mission script")
 def execute_script(script: Script, args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
     # Prevent directory traversal and extract a simple filename
     safe_name = Path(script.script_name).name
@@ -100,7 +100,7 @@ def execute_script(script: Script, args = Depends(get_args), scripts_table = Dep
         "script": safe_name,
     }
 
-@copter_mission_router.get("/running-scripts", tags=["mission"], summary="Lists scripts currently running")
+@router.get("/running-scripts", tags=["mission"], summary="Lists scripts currently running")
 def running_scripts(args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
     scripts = [
         {
@@ -115,7 +115,7 @@ def running_scripts(args = Depends(get_args), scripts_table = Depends(get_script
     ]
     return {"device": "uav", "id": str(args.sysid), "type": 50, "scripts": scripts}
 
-@copter_mission_router.post("/stop-script/", tags=["mission"], summary="Stops a running mission script")
+@router.post("/stop-script/", tags=["mission"], summary="Stops a running mission script")
 def stop_script(script: Script, args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
     safe_name = Path(script.script_name).name
     if not safe_name.endswith(".py"):
@@ -138,7 +138,7 @@ def stop_script(script: Script, args = Depends(get_args), scripts_table = Depend
 
     return {"device": "uav", "id": str(args.sysid), "type": 52, "script": safe_name, "info": "Stopped"}
 
-@copter_mission_router.delete("/clear-scripts", tags=["mission"], summary="Removes all script files (.py and .sh) from the scripts directory")
+@router.delete("/clear-scripts", tags=["mission"], summary="Removes all script files (.py and .sh) from the scripts directory")
 def clear_scripts(args = Depends(get_args)):
     scripts_dir = Path(args.scripts_path).expanduser()
     try:
