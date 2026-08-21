@@ -195,7 +195,7 @@ Since there is no terminal to read, output is written to files instead:
 
 | Output | Location |
 |--------|----------|
-| `sim_vehicle.py` and MAVProxy | `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` |
+| `sim_vehicle.py` and MAVProxy | `~/.uav_api/logs/ardupilot_logs/sitl_<sysid>.log` |
 | The vehicle binary (`ArduCopter`/`ArduPlane`) | `/tmp/<vehicle>.log`, chosen by ArduPilot |
 
 > The vehicle binary's path is ArduPilot's choice, not uav_api's, and it does not include the sysid — several headless instances on one host will write over each other there. The per-sysid `sitl_<sysid>.log` is unaffected.
@@ -382,12 +382,13 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--config` | None | Path to INI config file (`[api]`, `[simulated]`, `[logs]` sections) |
+| `--root_dir` | `~/.uav_api` | Root directory for all runtime artifacts: `logs/uav_logs`, `logs/ardupilot_logs`, `logs/script_logs`, `scripts/`, `certs/`. Per-path arguments below override their derived defaults. |
 | `--vehicle` | `copter` | `copter` (default) or `plane`. Selects which routers register and which ArduPilot SITL spawns. See [Vehicle Types](#vehicle-types). |
 | `--port` | 8000 | HTTP port the API listens on |
 | `--sysid` | 10 | MAVLink system ID; must match the drone's `SYSID_THISMAV` parameter |
 | `--uav_connection` | `127.0.0.1:17171` | MAVLink address — `host:port` for UDP, or serial device path for USB |
 | `--gradys_gs` | None | `host:port` of Gradys Ground Station — enables periodic GPS location push |
-| `--scripts_path` | `~/uav_scripts` | Directory where uploaded scripts are saved and executed from (copter mode). Created at startup if missing. |
+| `--scripts_path` | `~/.uav_api/scripts` | Directory where uploaded scripts are saved and executed from (copter mode). Created at startup if missing. |
 | `--python_path` | `python3` | Python binary used to run uploaded `.py` scripts |
 
 ## Connection (real drone)
@@ -405,18 +406,18 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`) |
 | `--speedup` | 1 | SITL simulation time multiplier |
 | `--gs_connection` | `[]` | Extra `host:port` addresses SITL streams telemetry to (e.g. Mission Planner) |
-| `--headless` | `false` | Run SITL without opening any terminal window; requires no X server. Output goes to `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log`. See [Running headless](#running-headless). |
+| `--headless` | `false` | Run SITL without opening any terminal window; requires no X server. Output goes to `~/.uav_api/logs/ardupilot_logs/sitl_<sysid>.log`. See [Running headless](#running-headless). |
 
 ## Logging
 
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--log_console` | `[]` | Components to print logs to console: `VEHICLE` `UVICORN` `GRADYS_GS` `SCRIPT`. `VEHICLE` is vehicle-agnostic — see [Logging in different vehicles](#logging-in-different-vehicles) for the prefix actually printed. |
-| `--log_path` | `~/uav_api_logs/uav_logs/uav_<sysid>.log` | File path to write all component logs combined. Its parent directory is created at startup. |
+| `--log_path` | `~/.uav_api/logs/uav_logs/uav_<sysid>.log` | File path to write all component logs combined. Its parent directory is created at startup. |
 | `--debug` | `[]` | Same component names as `--log_console` but at DEBUG verbosity |
-| `--script_logs` | `~/uav_api_logs/script_logs` | Directory where script stdout/stderr are saved as timestamped `.log` files. Created at startup if missing. |
+| `--script_logs` | `~/.uav_api/logs/script_logs` | Directory where script stdout/stderr are saved as timestamped `.log` files. Created at startup if missing. |
 
-> The API creates the directories it needs at startup — `scripts_path`, `script_logs`, and the parent of `log_path` — whether the path came from the default or from a config file, expanding `~` along the way. Nothing has to pre-create them for it.
+> The API creates the directories it needs at startup — `scripts_path`, `script_logs`, and the parent of `log_path` — whether the path came from `root_dir` derivation or from a config file, expanding `~` along the way (`mkdir -p` semantics, so a pre-provisioned `root_dir` such as a systemd `StateDirectory=` is fine). Nothing has to pre-create them for it. To relocate everything at once, set one key: `root_dir = /var/lib/uav_api`.
 
 ## UDP/QUIC mode
 
@@ -426,7 +427,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | `--certfile` | None | Path to TLS certificate PEM file. Auto-generated self-signed cert if omitted. |
 | `--keyfile` | None | Path to TLS private key PEM file. Auto-generated if omitted. |
 
-QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-signed certs are auto-generated in `~/uav_api_certs/`.
+QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-signed certs are auto-generated in `~/.uav_api/certs/`.
 
 **Starting the API in UDP/QUIC mode:**
 
@@ -498,7 +499,7 @@ uav-api --log_path ~/uav_api.log ...
 uav-api --debug VEHICLE ...
 
 # Save script stdout/stderr to a directory
-uav-api --script_logs ~/uav_api_logs/script_logs ...
+uav-api --script_logs ~/.uav_api/logs/script_logs ...
 ```
 
 Available log components: `VEHICLE`, `UVICORN`, `GRADYS_GS`, `SCRIPT`. The `VEHICLE` token routes to the active vehicle's logger; the actual line prefix you see is `[COPTER-<sysid>]` or `[PLANE-<sysid>]` depending on `--vehicle` — see [Logging in different vehicles](#logging-in-different-vehicles).
@@ -513,7 +514,7 @@ The API can host and execute Python or shell scripts on the UAV's companion comp
 ```
 POST /mission/upload-script   (multipart form, field: file)
 ```
-Accepts `.py` and `.sh` files. Saved to `--scripts_path` (default `~/uav_scripts`).
+Accepts `.py` and `.sh` files. Saved to `--scripts_path` (default `~/.uav_api/scripts`).
 
 **List uploaded scripts:**
 ```
@@ -1471,7 +1472,7 @@ Every module directly under `tests/` spawns a real SITL-backed API server
 - `tmux` (used by the mission router)
 
 Modules must run **sequentially** — every SITL instance shares the same
-working directory (`~/uav_api_logs/ardupilot_logs`) — so run them one at a
+working directory (`~/.uav_api/logs/ardupilot_logs`) — so run them one at a
 time, never with `pytest-xdist`:
 
 ```bash
@@ -1501,8 +1502,8 @@ Each module owns a fixed port/sysid so state cannot leak between modules:
 | `plane_telemetry_test` | 8009 | 9 | plane |
 
 SITL runs headless; if a module fails, SITL output is in
-`~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` and the API log is in
-`~/uav_api_logs/uav_logs/uav_<sysid>.log`.
+`~/.uav_api/logs/ardupilot_logs/sitl_<sysid>.log` and the API log is in
+`~/.uav_api/logs/uav_logs/uav_<sysid>.log`.
 
 ## Lint
 

@@ -9,6 +9,7 @@ from datetime import datetime
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from uav_api.routers.dependencies import get_args, init_copter, init_plane, get_scripts_table
+from uav_api.setup import ardupilot_logs_dir
 from uav_api.gradys_gs import send_location_to_gradys_gs
 from uav_api.log import set_log_config
 
@@ -91,8 +92,7 @@ def start_sitl(sitl_tag, args):
             script_path = os.path.join(ardupilot_base, "Tools/autotest/sim_vehicle.py")
         
         out_str = f"--out {args.uav_connection} {' '.join([f'--out {address}' for address in args.gs_connection])} "
-        home_dir = os.path.expanduser("~")
-        ardupilot_logs = os.path.join(home_dir, "uav_api_logs", "ardupilot_logs")
+        ardupilot_logs = ardupilot_logs_dir(args)
         ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"
         terminal_prefix = "" if args.headless else "xterm -e "
         # MAVProxy quits the moment its stdin reports EOF (mavproxy.py

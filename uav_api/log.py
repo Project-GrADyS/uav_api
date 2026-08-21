@@ -13,7 +13,7 @@ def resolve_log_file(log_path):
     logging *before* it calls `setup()`.
 
     Also expands `~`: nothing else in the codebase does, so an INI written with
-    `log_path = ~/uav_api_logs/...` would otherwise resolve to a literal `./~`
+    `log_path = ~/.uav_api/logs/...` would otherwise resolve to a literal `./~`
     directory even when the real one exists.
     """
     resolved = os.path.expanduser(log_path)

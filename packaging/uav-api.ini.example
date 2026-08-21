@@ -33,10 +33,9 @@ sysid = 1
 ; Optional. When set, the API pushes its GPS location here once per second.
 gradys_gs = 10.0.2.5:8000
 
-; Target directory for /mission/upload-script and source for
-; /mission/execute-script. Must exist and be writable by the service user.
-scripts_path = /home/pi/uav_scripts
-
-[logs]
-log_path = /home/pi/uav_api_logs/uav_logs/uav_1.log
-script_logs = /home/pi/uav_api_logs/script_logs
+; Root directory for all runtime artifacts. The API creates logs/uav_logs,
+; logs/script_logs, scripts/ and certs/ under it at startup (idempotent, safe
+; when pre-provisioned e.g. by systemd StateDirectory=). Must be writable by
+; the service user. The per-path keys scripts_path, log_path and script_logs
+; still override their derived defaults individually if needed.
+root_dir = /var/lib/uav_api

@@ -394,7 +394,7 @@ Uploads a Python or shell script to `scripts_path`. Multipart form upload.
 
 **Response:**
 ```json
-{"device": "uav", "id": "1", "type": 44, "info": "Mission File 'my_script.py' saved at ~/uav_scripts/my_script.py successfully."}
+{"device": "uav", "id": "1", "type": 44, "info": "Mission File 'my_script.py' saved at ~/.uav_api/scripts/my_script.py successfully."}
 ```
 
 **Errors:** 400 if wrong extension; 500 if file save fails.

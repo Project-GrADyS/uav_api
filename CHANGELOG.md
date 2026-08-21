@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--root_dir` (also settable in config files): a single root for all runtime
+  artifacts, defaulting to `~/.uav_api/` with the layout `logs/{uav_logs,
+  ardupilot_logs,script_logs}`, `scripts/` and `certs/`. Directories are
+  created with mkdir-p semantics, so a pre-provisioned root (e.g. systemd
+  `StateDirectory=`) works. `--log_path`, `--scripts_path`, `--script_logs`
+  and `--certfile`/`--keyfile` remain as per-path overrides.
+
 ### Changed
+- **BREAKING (default installs):** runtime artifacts move from
+  `~/uav_api_logs/`, `~/uav_scripts/` and `~/uav_api_certs/` (the latter was
+  hardcoded and could not be moved at all) to the single `~/.uav_api/` root.
+  Deployments that set explicit paths are unaffected.
 - The two near-duplicate logging-config builders in `uav_api/log.py` were
   collapsed into one builder parameterized by the server's logger names
   (uvicorn vs hypercorn), so the wiring can no longer drift apart.

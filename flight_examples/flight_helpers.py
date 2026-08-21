@@ -11,8 +11,8 @@ def add_common_args(parser):
                         help='Takeoff altitude in meters (default: 10)')
     parser.add_argument('--h3', action='store_true', default=False,
                         help='Use HTTP/3 over QUIC (requires niquests and TLS certs)')
-    parser.add_argument('--certfile', type=str, default='~/uav_api_certs/dev-cert.pem',
-                        help='TLS certificate path for HTTP/3 (default: ~/uav_api_certs/dev-cert.pem)')
+    parser.add_argument('--certfile', type=str, default='~/.uav_api/certs/dev-cert.pem',
+                        help='TLS certificate path for HTTP/3 (default: ~/.uav_api/certs/dev-cert.pem)')
     return parser
 
 

@@ -121,6 +121,14 @@ def parse_mode(mode_parser):
     )
 
     mode_parser.add_argument(
+        '--root_dir',
+        dest='root_dir',
+        default="~/.uav_api",
+        help="Root directory for all runtime artifacts (logs/, scripts/, certs/). "
+             "Individual path arguments override their derived defaults."
+    )
+
+    mode_parser.add_argument(
         '--vehicle',
         dest='vehicle',
         choices=['copter', 'plane'],
@@ -176,8 +184,8 @@ def parse_api(api_parser):
         '--scripts_path',
         dest='scripts_path',
         type=str,
-        default="~/uav_scripts",
-        help='Path for uav_scripts directory'
+        default=None,
+        help='Directory for uploaded mission scripts (default: <root_dir>/scripts)'
     )
 
     api_parser.add_argument(
@@ -228,7 +236,7 @@ def parse_simulated(simulated_parser):
         action='store_true',
         default=False,
         help="Run SITL without opening any terminal window, for hosts with no X server. "
-             "SITL output goes to ~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log"
+             "SITL output goes to <root_dir>/logs/ardupilot_logs/sitl_<sysid>.log"
     )
 
 def parse_logs(logs_parser):
@@ -253,7 +261,7 @@ def parse_logs(logs_parser):
         "--log_path",
         dest="log_path",
         default=None,
-        help="Saves log files to the provided path. This log file will receive the logs from all loggers of that UAV. Which include: COPTER, GRADYS_GS and API."
+        help="Saves log files to the provided path (default: <root_dir>/logs/uav_logs/uav_<sysid>.log). This log file will receive the logs from all loggers of that UAV. Which include: COPTER, GRADYS_GS and API."
     )
 
     logs_parser.add_argument(
@@ -269,7 +277,7 @@ def parse_logs(logs_parser):
         "--script_logs",
         dest="script_logs",
         default=None,
-        help="Saves script executed by mission route out and err files to the provided path"
+        help="Saves script executed by mission route out and err files to the provided path (default: <root_dir>/logs/script_logs)"
     )
 
 def parse_udp(udp_parser):
@@ -286,12 +294,12 @@ def parse_udp(udp_parser):
         '--certfile',
         dest='certfile',
         default=None,
-        help='Path to TLS certificate PEM file (for --udp mode). Auto-generated if omitted.'
+        help='Path to TLS certificate PEM file (for --udp mode). Auto-generated under <root_dir>/certs if omitted.'
     )
 
     udp_parser.add_argument(
         '--keyfile',
         dest='keyfile',
         default=None,
-        help='Path to TLS private key PEM file (for --udp mode). Auto-generated if omitted.'
+        help='Path to TLS private key PEM file (for --udp mode). Auto-generated under <root_dir>/certs if omitted.'
     )
