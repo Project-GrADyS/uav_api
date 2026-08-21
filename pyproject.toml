@@ -27,12 +27,12 @@ dependencies = [
     'pymavlink>=2.4.41',
     'uvicorn>=0.32.0',
     'hypercorn[h3]>=0.17.0',
-    'cryptography>=41.0.0',
+    'cryptography>=50.0.0',
     'future>=1.0.0',
     'pexpect>=4.9.0',
-    'aiohttp>=3.9.0',
+    'aiohttp>=3.14.3',
     'psutil>=5.9.0',
-    'python-multipart>=0.0.6'
+    'python-multipart>=0.0.31'
 ]
 
 [project.optional-dependencies]
