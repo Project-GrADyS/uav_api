@@ -37,7 +37,11 @@ def run_with_args(raw_args=None):
             "uav_api.api_app:app",
             host="0.0.0.0",
             port=args.port,
-            log_level="debug",
+            # log_config=None keeps uvicorn from installing its default
+            # dictConfig over the uvicorn.* loggers set_log_config just built
+            # (which would detach the file handler and --log_console wiring).
+            log_config=None,
+            log_level="debug" if "UVICORN" in args.debug else "info",
         )
 
 def spawn_with_args(raw_args=None):

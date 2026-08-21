@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- The two near-duplicate logging-config builders in `uav_api/log.py` were
+  collapsed into one builder parameterized by the server's logger names
+  (uvicorn vs hypercorn), so the wiring can no longer drift apart.
 - Config-file handling fails loudly instead of guessing: a missing or
   unreadable `--config` path aborts startup (it used to silently run on
   defaults — on a real drone that presented as "API up, no MAVLink"),
@@ -50,6 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes from hanging forever to raising a timeout error.
 
 ### Fixed
+- On the default (TCP/uvicorn) server, `--log_console UVICORN`, `--debug
+  UVICORN` and access logs in `--log_path` were silent no-ops: `uvicorn.run`
+  was called without `log_config=None`, so uvicorn's default logging config
+  overwrote the `uvicorn.*` loggers configured at startup, and
+  `log_level="debug"` was hardcoded. The server now keeps the pre-configured
+  loggers and derives its level from `--debug UVICORN`.
 - Concurrent request handlers, the drain loop, and the Gradys GS task all read
   the same MAVLink connection at once, silently stealing each other's messages
   (pymavlink's type-filtered reads discard every non-matching message).

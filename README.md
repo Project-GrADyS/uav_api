@@ -503,6 +503,8 @@ uav-api --script_logs ~/uav_api_logs/script_logs ...
 
 Available log components: `VEHICLE`, `UVICORN`, `GRADYS_GS`, `SCRIPT`. The `VEHICLE` token routes to the active vehicle's logger; the actual line prefix you see is `[COPTER-<sysid>]` or `[PLANE-<sysid>]` depending on `--vehicle` — see [Logging in different vehicles](#logging-in-different-vehicles).
 
+The `UVICORN` token controls the ASGI server's own loggers on both paths: uvicorn on the default TCP server and hypercorn under `--udp`. Server console verbosity follows `--debug UVICORN`; without it the server logs at INFO.
+
 ## Mission Script Management
 
 The API can host and execute Python or shell scripts on the UAV's companion computer. This is useful for deploying autonomous mission logic remotely.

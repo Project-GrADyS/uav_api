@@ -22,10 +22,14 @@ def resolve_log_file(log_path):
     return resolved
 
 
-def build_hypercorn_log_config(args):
-    """Build a logging dictConfig dict for Hypercorn loggers.
+def _build_log_config(args, token_loggers, always_console=(), no_propagate=()):
+    """Build a logging dictConfig dict.
 
-    Returns the dict to be passed directly to Config.logconfig_dict.
+    token_loggers maps each --log_console/--debug token (e.g. "UVICORN") to the
+    logger names it controls, so the same wiring serves both ASGI servers --
+    only the logger names differ between uvicorn and hypercorn. Loggers in
+    always_console get the console handler unconditionally; loggers in
+    no_propagate get 'propagate': False.
     """
     logging_config = {
         'version': 1,
@@ -44,18 +48,17 @@ def build_hypercorn_log_config(args):
                 'formatter': 'console_formatter'
             },
         },
-        'loggers': {
-            'hypercorn.access': {
-                'level': 'INFO',
-                'handlers': [],
-                'propagate': False
-            },
-            'hypercorn.error': {
-                'level': 'INFO',
-                'handlers': []
-            },
-        }
+        'loggers': {}
     }
+
+    for names in token_loggers.values():
+        for name in names:
+            logger = {'level': 'INFO', 'handlers': []}
+            if name in no_propagate:
+                logger['propagate'] = False
+            logging_config['loggers'][name] = logger
+    for name in always_console:
+        logging_config['loggers'][name] = {'level': 'INFO', 'handlers': ['console_handler']}
 
     if args.log_path:
         logging_config['handlers']['file_handler'] = {
@@ -66,105 +69,37 @@ def build_hypercorn_log_config(args):
         for logger in logging_config['loggers'].values():
             logger['handlers'].append('file_handler')
 
-    if "UVICORN" in args.log_console:
-        logging_config['loggers']['hypercorn.access']['handlers'].append('console_handler')
-        logging_config['loggers']['hypercorn.error']['handlers'].append('console_handler')
-
-    if "UVICORN" in args.debug:
-        logging_config['loggers']['hypercorn.access']['level'] = "DEBUG"
-        logging_config['loggers']['hypercorn.error']['level'] = "DEBUG"
+    for token, names in token_loggers.items():
+        if token in args.log_console:
+            for name in names:
+                logging_config['loggers'][name]['handlers'].append('console_handler')
+        if token in args.debug:
+            for name in names:
+                logging_config['loggers'][name]['level'] = "DEBUG"
 
     return logging_config
 
+
+def build_hypercorn_log_config(args):
+    """Build a logging dictConfig dict for Hypercorn loggers.
+
+    Returns the dict to be passed directly to Config.logconfig_dict.
+    """
+    return _build_log_config(
+        args,
+        {"UVICORN": ["hypercorn.access", "hypercorn.error"]},
+        no_propagate=("hypercorn.access",),
+    )
+
+
 def set_log_config(args):
-    logging_config = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'console_formatter': {
-                'format': f"[%(name)s-{args.sysid}] %(levelname)s - %(message)s"
-            },
-            'file_formatter': {
-                'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            }
-        },
-        "handlers": {
-            'console_handler': {
-                'class': 'logging.StreamHandler',
-                'formatter': 'console_formatter'
-            },
-        },
-        'loggers': {
-            'COPTER': {
-                'level': 'INFO',
-                'handlers': []
-            },
-            'PLANE': {
-                'level': 'INFO',
-                'handlers': []
-            },
-            "uvicorn": {
-                'level': 'INFO',
-                'handlers': []
-            },
-            "uvicorn.access": {
-                'level': 'INFO',
-                'handlers': []
-            },
-            "uvicorn.error": {
-                'level': 'INFO',
-                'handlers': []
-            },
-            "GRADYS_GS": {
-                'level': 'INFO',
-                'handlers': []
-            },
-            "SCRIPT": {
-                'level': 'INFO',
-                'handlers': []
-            },
-            "SYSTEM": {
-                'level': 'INFO',
-                'handlers': ['console_handler']
-            },
-        }
+    vehicle_logger = "PLANE" if args.vehicle == "plane" else "COPTER"
+    token_loggers = {
+        "VEHICLE": [vehicle_logger],
+        "UVICORN": ["uvicorn", "uvicorn.access", "uvicorn.error"],
+        "GRADYS_GS": ["GRADYS_GS"],
+        "SCRIPT": ["SCRIPT"],
     }
-
-    if args.log_path:
-        logging_config['handlers']['file_handler'] = {
-            'class': 'logging.FileHandler',
-            'filename': resolve_log_file(args.log_path),
-            'formatter': 'file_formatter'
-        }
-        for logger in logging_config['loggers'].values():
-            logger['handlers'].append('file_handler')
-
-    if "VEHICLE" in args.log_console:
-        if "plane" == args.vehicle:
-            logging_config['loggers']["PLANE"]['handlers'].append('console_handler')
-        else:
-            logging_config['loggers']["COPTER"]['handlers'].append('console_handler')
-    if "UVICORN" in args.log_console:
-        logging_config['loggers']["uvicorn"]['handlers'].append('console_handler')
-        logging_config['loggers']["uvicorn.access"]['handlers'].append('console_handler')
-        logging_config['loggers']["uvicorn.error"]['handlers'].append('console_handler')
-    if "GRADYS_GS" in args.log_console:
-        logging_config['loggers']["GRADYS_GS"]['handlers'].append('console_handler')
-    if "SCRIPT" in args.log_console:
-        logging_config['loggers']["SCRIPT"]['handlers'].append('console_handler')
-
-    if "VEHICLE" in args.debug:
-        if "plane" == args.vehicle:
-            logging_config['loggers']["PLANE"]['level'] = "DEBUG"
-        else:
-            logging_config['loggers']["COPTER"]['level'] = "DEBUG"
-    if "UVICORN" in args.debug:
-        logging_config['loggers']["uvicorn"]['level'] = "DEBUG"
-        logging_config['loggers']["uvicorn.access"]['level'] = "DEBUG"
-        logging_config['loggers']["uvicorn.error"]['level'] = "DEBUG"
-    if "GRADYS_GS" in args.debug:
-        logging_config['loggers']["GRADYS_GS"]['level'] = "DEBUG"
-    if "SCRIPT" in args.debug:
-        logging_config['loggers']["SCRIPT"]['level'] = "DEBUG"
-
-    logging.config.dictConfig(logging_config)
+    logging.config.dictConfig(
+        _build_log_config(args, token_loggers, always_console=("SYSTEM",))
+    )
