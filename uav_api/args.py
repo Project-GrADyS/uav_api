@@ -231,6 +231,15 @@ def parse_simulated(simulated_parser):
     )
 
     simulated_parser.add_argument(
+        '--terminal',
+        dest='terminal',
+        default='xterm -e',
+        help="Terminal command used to wrap SITL, following ArduPilot's "
+             "SITL_RITW_TERMINAL convention (e.g. 'xterm -e', "
+             "'gnome-terminal --'). Ignored with --headless."
+    )
+
+    simulated_parser.add_argument(
         '--headless',
         dest='headless',
         action='store_true',

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `--terminal`: the terminal command SITL is wrapped in (default `xterm -e`),
+  following ArduPilot's `SITL_RITW_TERMINAL` convention — e.g.
+  `--terminal 'gnome-terminal --'`. Ignored with `--headless`.
+- The requested `--location` is validated at startup: unknown names abort
+  with a clear message when ArduPilot's built-in locations.txt is checkable
+  (`--ardupilot_path` set), and warn otherwise.
 - `--root_dir` (also settable in config files): a single root for all runtime
   artifacts, defaulting to `~/.uav_api/` with the layout `logs/{uav_logs,
   ardupilot_logs,script_logs}`, `scripts/` and `certs/`. Directories are
@@ -65,6 +71,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes from hanging forever to raising a timeout error.
 
 ### Fixed
+- The SITL launch command is now built as an argv list end-to-end instead of
+  an f-string later split on spaces: no more empty argv entries from the
+  double space after `--out`, and paths containing spaces
+  (`--ardupilot_path`, the log directory) survive intact. The bare `except:`
+  around SITL startup is narrowed to `except Exception` and now logs the
+  actual exception.
+- Custom SITL home locations are merged into an existing
+  `~/.config/ardupilot/locations.txt` (preserving user entries) instead of
+  being written only when the file did not exist — on machines with a
+  pre-existing file the AbraDF entries were never added and SITL failed on
+  the default `--location` with no hint why. The file is now only touched in
+  simulated mode.
 - On the default (TCP/uvicorn) server, `--log_console UVICORN`, `--debug
   UVICORN` and access logs in `--log_path` were silent no-ops: `uvicorn.run`
   was called without `log_config=None`, so uvicorn's default logging config

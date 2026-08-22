@@ -29,9 +29,9 @@ Same axes, but meters/s. Used only by `/movement/travel_at_ned`. Note the body m
 
 ## SITL quirks (`--simulated`)
 
-**xterm wrapping.** By default SITL is spawned as `xterm -e sim_vehicle.py ...` (see `start_sitl` in `lifespan.py:85`). The xterm window is the only place SITL stderr/stdout land, so if SITL fails to come up, the API will just time out on its connect retries while the xterm shows the real error. Always check the xterm window first.
+**Terminal wrapping.** By default SITL is spawned as `xterm -e sim_vehicle.py ...` (see `start_sitl` in `lifespan.py`; the wrapper is configurable with `--terminal`, e.g. `--terminal 'gnome-terminal --'`). The terminal window is the only place SITL stderr/stdout land, so if SITL fails to come up, the API will just time out on its connect retries while the terminal shows the real error. Always check the terminal window first.
 
-**Headless mode.** `--headless` drops the `xterm -e` wrapper, removes `DISPLAY`, `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ` from SITL's environment, and passes `--mavproxy-args=--daemon`. All three are needed:
+**Headless mode.** `--headless` drops the terminal wrapper, removes `DISPLAY`, `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ` from SITL's environment, and passes `--mavproxy-args=--daemon`. All three are needed:
 
 - ArduPilot's `run_in_terminal_window.sh` starts the vehicle binary in whatever terminal those variables name, and only falls back to a background process when none are set — so the env scrub, not just the missing `xterm -e`, is what stops a window appearing.
 - MAVProxy exits as soon as its stdin reports EOF (`input_loop` in `mavproxy.py`), and `sim_vehicle.py` blocks on MAVProxy and exits with it. Headless without `--daemon` therefore dies instantly, and the API reports `SITL failed to initialize` two seconds later.

@@ -185,7 +185,7 @@ uav-api --simulated --headless --speedup 1 --port 8000 --sysid 1
 
 This does three things, and all three are required:
 
-1. uav_api stops wrapping `sim_vehicle.py` in `xterm`.
+1. uav_api stops wrapping `sim_vehicle.py` in the terminal command (`xterm -e` by default, configurable with `--terminal`).
 2. It removes `DISPLAY` (along with `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ`) from the environment it hands to SITL. ArduPilot's `run_in_terminal_window.sh` launches the vehicle binary in whatever terminal those variables point at, and only runs it in the background when none are set — without the scrub you would still get a window on a desktop.
 3. It passes `--mavproxy-args=--daemon`, so MAVProxy starts without an interactive shell. This one is not cosmetic: MAVProxy treats EOF on stdin as a request to quit, and `sim_vehicle.py` exits when MAVProxy does, so a headless SITL without it dies within milliseconds of starting.
 
@@ -403,9 +403,10 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 |----------|---------|-------------|
 | `--simulated` | off | Bare flag; presence spawns ArduPilot SITL alongside the API (binary is `ArduCopter` or `ArduPlane` depending on `--vehicle`). In config files use `simulated = true/false` |
 | `--ardupilot_path` | `None` | Path to local ArduPilot repository. When omitted, `sim_vehicle.py` is resolved from the `PATH` environment variable; when set, SITL is launched from `<ardupilot_path>/Tools/autotest/sim_vehicle.py`. See [Locating ArduPilot](#locating-ardupilot---ardupilot_path). |
-| `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`) |
+| `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`). The custom AbraDF entries are merged into that file at startup, preserving existing entries; an unknown name aborts startup when ArduPilot's built-in list is checkable (`--ardupilot_path` set), and warns otherwise. |
 | `--speedup` | 1 | SITL simulation time multiplier |
 | `--gs_connection` | `[]` | Extra `host:port` addresses SITL streams telemetry to (e.g. Mission Planner) |
+| `--terminal` | `xterm -e` | Terminal command SITL is wrapped in, following ArduPilot's `SITL_RITW_TERMINAL` convention (e.g. `gnome-terminal --`). Ignored with `--headless`. |
 | `--headless` | `false` | Run SITL without opening any terminal window; requires no X server. Output goes to `~/.uav_api/logs/ardupilot_logs/sitl_<sysid>.log`. See [Running headless](#running-headless). |
 
 ## Logging

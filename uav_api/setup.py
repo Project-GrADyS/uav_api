@@ -19,19 +19,84 @@ def ensure_dir_exists(path):
     logger.info(f"Directory ready: {target_path}")
     return target_path
 
-def ensure_home_subdir_exists(subdir_name):
-    ensure_dir_exists(_resolve_home_path(subdir_name))
+# SITL home positions registered for every install. locations.txt is a
+# location mandated by ArduPilot itself (~/.config/ardupilot), so it does NOT
+# move under root_dir.
+CUSTOM_LOCATIONS = {
+    "AbraDF": "-15.840081,-47.926642,1042,30",
+    "Abradf1": "-15.8427104,-47.9231787,1042,30",
+    "Abradf2": "-15.8415750,-47.9290581,1042,30",
+    "Abradf3": "-15.8436186,-47.9262686,1042,30",
+}
 
-def ensure_home_file_exists(filename, content=""):
-    file_path = _resolve_home_path(filename)
+def _parse_location_names(file_path):
+    """Read the location names (the part before '=') from a locations.txt."""
+    names = set()
+    if os.path.isfile(file_path):
+        with open(file_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    names.add(line.split("=", 1)[0].strip())
+    return names
 
-    if not os.path.isfile(file_path):
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, 'w') as f:
-            f.write(content)
-        logger.info(f"Created file: {file_path}")
-    else:
-        logger.info(f"File already exists: {file_path}")
+def merge_locations(file_path, wanted):
+    """Append the missing entries of `wanted` (name -> 'lat,lon,alt,heading').
+
+    Existing entries -- including a user's own -- are never touched. The old
+    behavior wrote the file only when it did not exist, so on any machine with
+    a pre-existing locations.txt (most ArduPilot dev machines) the custom
+    locations were never added and SITL failed on the default --location with
+    no hint why.
+    """
+    existing_content = ""
+    if os.path.isfile(file_path):
+        with open(file_path) as f:
+            existing_content = f.read()
+    existing_names = _parse_location_names(file_path)
+
+    missing = [name for name in wanted if name not in existing_names]
+    if not missing:
+        return
+
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "a") as f:
+        # A hand-edited file may lack a trailing newline; without this the
+        # first appended entry would glue onto the last existing line.
+        if existing_content and not existing_content.endswith("\n"):
+            f.write("\n")
+        for name in missing:
+            f.write(f"{name}={wanted[name]}\n")
+    logger.info(f"Added SITL locations {missing} to {file_path}")
+
+def validate_location(args, locations_file):
+    """Fail fast on an unknown --location instead of letting SITL die opaquely.
+
+    Known names come from the merged custom file, plus ArduPilot's built-in
+    Tools/autotest/locations.txt when --ardupilot_path makes it findable. With
+    sim_vehicle.py resolved from PATH the built-in list is not visible from
+    here, so an unknown name only warns -- it may still be a built-in.
+    """
+    if args.location in _parse_location_names(locations_file):
+        return
+
+    if args.ardupilot_path is not None:
+        builtin_file = os.path.join(
+            os.path.expanduser(args.ardupilot_path), "Tools/autotest/locations.txt"
+        )
+        if os.path.isfile(builtin_file):
+            if args.location in _parse_location_names(builtin_file):
+                return
+            raise SystemExit(
+                f"Unknown SITL location '{args.location}': not in {locations_file} "
+                f"nor in {builtin_file}. Register it in {locations_file} as "
+                "NAME=lat,lon,alt,heading."
+            )
+
+    logger.warning(
+        f"SITL location '{args.location}' not found in {locations_file}; "
+        "if it is not an ArduPilot built-in either, sim_vehicle.py will fail to start."
+    )
 
 def resolve_root_dir(args):
     """Expand and absolutize args.root_dir, writing the result back.
@@ -135,10 +200,10 @@ def ensure_dev_certs(args):
 
 def setup(args):
 
-    locations = "AbraDF=-15.840081,-47.926642,1042,30\nAbradf1=-15.8427104,-47.9231787,1042,30\nAbradf2=-15.8415750,-47.9290581,1042,30\nAbradf3=-15.8436186,-47.9262686,1042,30"
-
-    ensure_home_subdir_exists(".config/ardupilot")
-    ensure_home_file_exists(".config/ardupilot/locations.txt", locations)
+    if args.simulated:
+        locations_file = _resolve_home_path(".config/ardupilot/locations.txt")
+        merge_locations(locations_file, CUSTOM_LOCATIONS)
+        validate_location(args, locations_file)
 
     # Every directory below is resolved and created unconditionally, whether
     # the path was derived from root_dir or supplied explicitly. derive_paths
