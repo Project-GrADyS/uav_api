@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-22
+
 ### Added
 - `POST /movement/drive_body` and `POST /movement/drive_body_wait`: relative
   movement in the body FRD frame (`MAV_FRAME_BODY_OFFSET_NED` on the wire —
@@ -379,6 +381,7 @@ Initial public release (renamed from `uav_control`). Copter GUIDED control over
 HTTP, ArduPilot SITL support, `sim_speedup` control, `take_picture`, Swagger
 docs, INI config, and initial flight examples.
 
+[0.3.0]: https://github.com/Project-GrADyS/uav_api/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/Project-GrADyS/uav_api/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Project-GrADyS/uav_api/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Project-GrADyS/uav_api/compare/v0.1.3...v0.2.0
