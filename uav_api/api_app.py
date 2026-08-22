@@ -32,7 +32,7 @@ def create_app(args) -> FastAPI:
         title="Uav_API",
         summary="API designed to simplify vehicle control for Ardupilot UAVs.",
         description=description,
-        version="0.2.2",
+        version="0.3.0",
         openapi_tags=metadata,
         lifespan=lifespan
     )
