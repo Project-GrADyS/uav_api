@@ -8,6 +8,8 @@ import pytest
 
 from unit_helpers import NED_POSITION, assert_envelope
 
+from uav_api.routers.copter.movement import _body_frd_to_ned_target
+
 pytestmark = pytest.mark.copter
 
 GPS_BODY = {"lat": -15.84, "long": -47.92, "alt": 30}
@@ -86,6 +88,57 @@ class TestNed:
         r = copter_client.post("/movement/go_to_ned", json={"x": 1.0, "y": 2.0})
         assert r.status_code == 422
         fake_copter.go_to_ned.assert_not_called()
+
+
+class TestBodyFrd:
+    BODY = {"front": 3.0, "right": 4.0, "down": -1.0}
+
+    def test_drive_body(self, copter_client, fake_copter):
+        r = copter_client.post("/movement/drive_body", json=self.BODY)
+        assert r.status_code == 200
+        assert_envelope(r.json(), "driving")
+        fake_copter.drive_body_frd.assert_called_once_with(3.0, 4.0, -1.0, look_at_target=False)
+
+    def test_drive_body_look_at_target(self, copter_client, fake_copter):
+        r = copter_client.post("/movement/drive_body", json={**self.BODY, "look_at_target": True})
+        assert r.status_code == 200
+        fake_copter.drive_body_frd.assert_called_once_with(3.0, 4.0, -1.0, look_at_target=True)
+
+    def test_drive_body_wait(self, copter_client, fake_copter):
+        # GENERAL.heading is 90°: front maps to east, right to south, so the
+        # (3, 4, -1) body offset becomes a (-4, 3, -1) NED offset.
+        r = copter_client.post("/movement/drive_body_wait", json=self.BODY)
+        assert r.status_code == 200
+        assert_envelope(r.json(), "arrived")
+        fake_copter.drive_body_frd.assert_called_once_with(3.0, 4.0, -1.0, look_at_target=False)
+        target = fake_copter.wait_ned_position.call_args[0][0]
+        assert target.x == pytest.approx(NED_POSITION.x - 4.0)
+        assert target.y == pytest.approx(NED_POSITION.y + 3.0)
+        assert target.z == pytest.approx(NED_POSITION.z - 1.0)
+
+    @pytest.mark.parametrize("heading,expected_ned", [
+        (0, (3.0, 4.0)),
+        (90, (-4.0, 3.0)),
+        (180, (-3.0, -4.0)),
+        (270, (4.0, -3.0)),
+    ])
+    def test_body_frd_to_ned_target(self, heading, expected_ned):
+        target = _body_frd_to_ned_target(NED_POSITION, heading, 3.0, 4.0, -1.0)
+        assert target.x == pytest.approx(NED_POSITION.x + expected_ned[0])
+        assert target.y == pytest.approx(NED_POSITION.y + expected_ned[1])
+        assert target.z == pytest.approx(NED_POSITION.z - 1.0)
+
+    def test_drive_body_failure_is_500(self, copter_client, fake_copter):
+        fake_copter.drive_body_frd.side_effect = Exception("boom")
+        r = copter_client.post("/movement/drive_body", json=self.BODY)
+        assert r.status_code == 500
+        assert "DRIVE FAIL" in r.json()["detail"]
+
+    def test_drive_body_malformed_body_is_422(self, copter_client, fake_copter):
+        # Field names are front/right/down by design — x/y/z must not be accepted.
+        r = copter_client.post("/movement/drive_body", json={"x": 1.0, "y": 2.0, "z": 3.0})
+        assert r.status_code == 422
+        fake_copter.drive_body_frd.assert_not_called()
 
 
 class TestYaw:

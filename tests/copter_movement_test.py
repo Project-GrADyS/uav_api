@@ -27,6 +27,12 @@ def ned_info(api):
     return r.json()["info"]
 
 
+def general_info(api):
+    r = api.get("/telemetry/general")
+    assert r.status_code == 200
+    return r.json()["info"]
+
+
 def observe(api, predicate, timeout=6, interval=0.1):
     """Poll NED telemetry until predicate(info) holds; return whether it did.
 
@@ -130,6 +136,50 @@ class TestDrive:
             lambda info: (info["velocity"]["vx"] ** 2 + info["velocity"]["vy"] ** 2) ** 0.5 > 0.3,
         )
         assert moved, "Never observed movement after drive"
+
+        halt(api)
+
+
+class TestDriveBody:
+    def test_drive_body_moves(self, api):
+        """POST /movement/drive_body → drone moves relative to its heading."""
+        r = api.post("/movement/drive_body", json={"front": 15.0, "right": 0.0, "down": 0.0})
+        assert r.status_code == 200
+
+        moved = observe(
+            api,
+            lambda info: (info["velocity"]["vx"] ** 2 + info["velocity"]["vy"] ** 2) ** 0.5 > 0.3,
+        )
+        assert moved, "Never observed movement after drive_body"
+
+        halt(api)
+
+    def test_drive_body_wait_follows_heading(self, api):
+        """POST /movement/drive_body_wait with heading 45° → the front offset
+        splits equally between north and east (8·cos45° ≈ 8·sin45° ≈ 5.66 m).
+
+        A plain offset-NED implementation would move all-north and an
+        axis-swapped one all-east, so neither can pass this.
+        """
+        r = api.get("/movement/set_heading", params={"heading": 45})
+        assert r.status_code == 200
+        turned = observe(
+            api, lambda _info: abs(general_info(api)["heading"] - 45) <= 5, timeout=15
+        )
+        assert turned, "Drone never reached heading 45"
+
+        start = ned_info(api)["position"]
+        r = api.post("/movement/drive_body_wait", json={"front": 8.0, "right": 0.0, "down": 0.0})
+        assert r.status_code == 200
+
+        pos = ned_info(api)["position"]
+        expected = 8.0 * (2 ** 0.5) / 2  # ≈ 5.66 m on each horizontal axis
+        assert abs((pos["x"] - start["x"]) - expected) < 2.0, (
+            f"north delta {pos['x'] - start['x']}, expected ~{expected}"
+        )
+        assert abs((pos["y"] - start["y"]) - expected) < 2.0, (
+            f"east delta {pos['y'] - start['y']}, expected ~{expected}"
+        )
 
         halt(api)
 

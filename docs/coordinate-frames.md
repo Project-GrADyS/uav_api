@@ -4,7 +4,7 @@ Coordinate frames, SITL launch quirks, real-drone connection tradeoffs, and comm
 
 ## Coordinate frames
 
-Three frames appear in the API surface:
+Four frames appear in the API surface:
 
 ### 1. GPS (absolute)
 Units: degrees of latitude/longitude, meters MSL for altitude.
@@ -22,6 +22,11 @@ NED is only defined once HOME is known, which happens at arming. Client scripts 
 
 ### 3. NED velocity
 Same axes, but meters/s. Used only by `/movement/travel_at_ned`. Note the body model (`Local_velocity`: `vx`, `vy`, `vz`) differs from the position model (`Local_pos`: `x`, `y`, `z`) — copying a position into a velocity call silently fails.
+
+### 4. Body FRD (vehicle-relative, orientation-relative)
+Units: meters. Axes: **F**ront, **R**ight, **D**own — relative to the vehicle's current position **and heading**. Sent as [`MAV_FRAME_BODY_OFFSET_NED`](https://mavlink.io/en/messages/common.html#MAV_FRAME_BODY_OFFSET_NED): MAVLink deprecated that name in favor of `MAV_FRAME_BODY_FRD`, but ArduPilot only accepts the old one and silently holds position on the new one.
+
+Used by `/movement/drive_body` and `/movement/drive_body_wait` (model `Body_pos`: `front`, `right`, `down`). Unlike offset-NED (`/movement/drive`), the same request moves the vehicle in a different world direction depending on where it is pointing: `front=5` with heading 90° moves 5 m east. `down` follows the same sign convention as NED `z` — negative to climb.
 
 ### GPS ↔ NED conversions
 
@@ -72,6 +77,8 @@ The async drain loop (`lifespan.py:153`) continuously reads MAVLink messages so 
 |---------|-------|
 | `go_to_ned z=20` makes the drone land | Forgot the negative sign — NED `z` is Down. Use `z = -20` for 20 m altitude. |
 | `travel_at_ned` request 422 | Used position field names (`x`, `y`, `z`) instead of velocity (`vx`, `vy`, `vz`). |
+| `drive_body` request 422 | Used NED field names (`x`, `y`, `z`) instead of body (`front`, `right`, `down`) — deliberate, so a body-frame request can never be mistaken for an NED one. |
+| `drive_body_wait` settles ~1 m off the expected spot | The arrival target is computed from the heading sampled at send time, while ArduPilot resolves the setpoint against attitude at receipt — a vehicle yawing rapidly when the command lands can diverge slightly. |
 | `/command/arm` hangs | No GPS lock. Check `GET /telemetry/gps_raw` — `satelites` should be ≥ 6 before arming outdoors; in SITL, needs a few seconds after `sim_vehicle` starts. |
 | Set parameter succeeds but drone does not obey | Some ArduPilot params only apply on reboot. SITL can be restarted by killing the process and re-running the API. |
 | NED drifts away from reported position | HOME was captured before arming; positions report relative to a stale origin. Always arm → capture home → takeoff. |

@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `POST /movement/drive_body` and `POST /movement/drive_body_wait`: relative
+  movement in the body FRD frame (`MAV_FRAME_BODY_OFFSET_NED` on the wire —
+  ArduPilot rejects the newer `MAV_FRAME_BODY_FRD` name) — front/right/down
+  offsets resolved against the vehicle's current position **and heading**,
+  alongside the existing global-NED and offset-NED movement. New `Body_pos`
+  request model (`front`, `right`, `down`, `look_at_target`); the blocking
+  variant computes its arrival target by rotating the offset by the heading
+  sampled at send time. (#7)
 - **Response models on all 55 routes** (`uav_api/classes/responses.py`): the
   envelope is now machine-readable in the OpenAPI schema. Canonical shape:
   `device`/`id`/`result` on every JSON response. Telemetry `result` is
@@ -84,6 +92,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes from hanging forever to raising a timeout error.
 
 ### Fixed
+- `GET /peripherical/take_photo` no longer fails with an internal `TypeError`
+  whenever `focus_distance` is provided (the manual-focus flags were appended
+  with a broken `list.append` call). The parameter is now a `float` (sub-meter
+  focus distances work) validated as `> 0`, so `focus_distance=0` returns 422
+  instead of hitting a `ZeroDivisionError`.
+- `POST /mission/execute-script/` no longer reports success when the script
+  never started: a non-zero tmux exit now returns 500 with tmux's stderr in
+  the detail, a missing tmux binary returns 503 instead of an unhandled
+  traceback, and no "running" entry is recorded in either case. The paths
+  interpolated into the `bash -c` command line are shell-quoted, so a
+  scripts or log directory containing spaces survives intact. `upload-script`
+  is now a sync endpoint, keeping its blocking disk I/O off the event loop.
 - Removed the phantom `timeout` query parameter that `GET /command/land`
   advertised but never read, and the unused inline `Movement` model in the
   copter command router.

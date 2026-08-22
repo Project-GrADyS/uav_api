@@ -1,4 +1,5 @@
 import logging
+import shlex
 import shutil
 import time
 import subprocess
@@ -24,7 +25,7 @@ router = APIRouter(
 )
 
 @router.post("/upload-script", tags=["mission"], summary="Uploads a mission script (.py file) to the UAV scripts directory", response_model=UploadScriptResponse)
-async def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
+def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
     # 1. Validate file extension
     if not (file.filename.endswith(".py") or file.filename.endswith(".sh")):
         raise HTTPException(status_code=400, detail="Only .py and .sh files are allowed.")
@@ -45,7 +46,7 @@ async def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
         raise HTTPException(status_code=500, detail=f"Could not save file: {e}")
     finally:
         # Always close the SpooledTemporaryFile
-        await file.close()
+        file.file.close()
 
     return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 44, "info": f"Mission File '{safe_filename}' saved at {target_path} successfully."}
 
@@ -84,8 +85,23 @@ def execute_script(script: Script, args = Depends(get_args), scripts_table = Dep
     session_name = f"UAV_API_{args.sysid}-{safe_name.replace('.', '_')}-{timestamp}"
     # tmux owns the command lifecycle: when the python process exits, the
     # session auto-terminates, which is what scripts_watcher_loop polls for.
-    command = f"{args.python_path} {script_path} 1> {out_file} 2> {err_file}"
-    subprocess.run(["tmux", "new-session", "-d", "-s", session_name, "bash", "-c", command])
+    command = (
+        f"{shlex.quote(str(args.python_path))} {shlex.quote(str(script_path))} "
+        f"1> {shlex.quote(out_file)} 2> {shlex.quote(err_file)}"
+    )
+    try:
+        result = subprocess.run(
+            ["tmux", "new-session", "-d", "-s", session_name, "bash", "-c", command],
+            capture_output=True,
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail="EXECUTE SCRIPT FAIL: tmux is not installed")
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace").strip() if result.stderr else ""
+        raise HTTPException(
+            status_code=500,
+            detail=f"EXECUTE SCRIPT FAIL: tmux exited with code {result.returncode}: {stderr}",
+        )
 
     scripts_table[safe_name] = {
         "status": "running",

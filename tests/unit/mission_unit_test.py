@@ -7,6 +7,7 @@ needs no tmux installed. The scripts_table fixture gives per-test state
 isolation (the real table is a process-wide global).
 """
 
+import shlex
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -131,6 +132,49 @@ class TestLifecycle:
     def test_stop_unknown_script_is_404(self, copter_client, tmux_calls):
         r = copter_client.post("/mission/stop-script/", json={"script_name": "ghost"})
         assert r.status_code == 404
+
+
+class TestExecuteFailures:
+    def test_execute_tmux_failure_is_500(self, copter_client, scripts_table, monkeypatch):
+        def failing_run(cmd, **kwargs):
+            return SimpleNamespace(returncode=1, stdout=b"", stderr=b"duplicate session")
+
+        monkeypatch.setattr("uav_api.routers.common.mission.subprocess.run", failing_run)
+        upload(copter_client)
+        r = copter_client.post("/mission/execute-script/", json={"script_name": "test_script"})
+        assert r.status_code == 500
+        assert "duplicate session" in r.json()["detail"]
+        # No phantom "running" entry for a session tmux never created.
+        assert scripts_table == {}
+
+    def test_execute_tmux_missing_is_503(self, copter_client, scripts_table, monkeypatch):
+        def missing_run(cmd, **kwargs):
+            raise FileNotFoundError("tmux")
+
+        monkeypatch.setattr("uav_api.routers.common.mission.subprocess.run", missing_run)
+        upload(copter_client)
+        r = copter_client.post("/mission/execute-script/", json={"script_name": "test_script"})
+        assert r.status_code == 503
+        assert "tmux is not installed" in r.json()["detail"]
+        assert scripts_table == {}
+
+    def test_execute_quotes_paths_with_spaces(
+        self, copter_client, copter_args, tmux_calls, tmp_path
+    ):
+        logs_dir = tmp_path / "logs with space"
+        logs_dir.mkdir()
+        # The get_args override returns this same Namespace by reference.
+        copter_args.script_logs = str(logs_dir)
+
+        upload(copter_client)
+        r = copter_client.post("/mission/execute-script/", json={"script_name": "test_script"})
+        assert r.status_code == 200
+
+        assert tmux_calls[0][5:7] == ["bash", "-c"]
+        command = tmux_calls[0][7]
+        log_tokens = [t for t in shlex.split(command) if t.endswith(".log")]
+        assert len(log_tokens) == 2
+        assert all(str(logs_dir) in t for t in log_tokens)
 
 
 class TestClear:

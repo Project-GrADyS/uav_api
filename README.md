@@ -580,6 +580,7 @@ Take a photo using a whitelisted camera CLI tool. The chosen tool **must be inst
 | `command` | *(required)* | One of: `fswebcam`, `rpicam-still`, `libcamera-still` |
 | `resolution` | `1280x720` | Capture resolution (`WIDTHxHEIGHT`) |
 | `capture_time` | `150` | Warm-up / exposure delay in milliseconds |
+| `focus_distance` | *(none)* | Disables autofocus, sets lens position to `1/focus_distance` (meters, > 0). `rpicam-still`/`libcamera-still` only |
 
 **Examples:**
 ```bash
@@ -640,14 +641,14 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | `uav_api/log.py` | Logger configuration; routes `VEHICLE` token to `COPTER`/`PLANE` logger based on `--vehicle` |
 | `uav_api/setup.py` | Idempotent startup setup — creates the scripts, script-log and log directories (defaulted or configured) plus the ArduPilot locations file |
 | `uav_api/routers/copter/command.py` | Copter endpoints: arm, takeoff, land, RTL, speed, home |
-| `uav_api/routers/copter/movement.py` | Copter endpoints: go_to_gps, go_to_ned, drive (fire-and-forget + blocking pairs), set_heading |
+| `uav_api/routers/copter/movement.py` | Copter endpoints: go_to_gps, go_to_ned, drive, drive_body (fire-and-forget + blocking pairs), set_heading |
 | `uav_api/routers/copter/telemetry.py` | Copter endpoints: GPS, NED, compass, battery, sensor status, home info |
 | `uav_api/routers/plane/command.py` | Plane endpoints: arm, disarm, takeoff, land, land_at, RTL, set_home |
 | `uav_api/routers/plane/movement.py` | Plane endpoints: go_to_gps, go_to_gps_wait, stop |
 | `uav_api/routers/plane/telemetry.py` | Plane endpoints: general, GPS, battery, sensor status, error, home info |
 | `uav_api/routers/common/mission.py` | Vehicle-agnostic endpoints (registered for copter): upload-script, list-scripts, execute-script, running-scripts, stop-script, clear-scripts |
 | `uav_api/routers/common/peripherical.py` | Peripheral endpoints (registered for copter): take_photo, servo_output |
-| `uav_api/classes/movement.py` | Pydantic models: `Gps_pos`, `Local_pos`, `Local_velocity` |
+| `uav_api/classes/movement.py` | Pydantic models: `Gps_pos`, `Local_pos`, `Body_pos`, `Local_velocity` |
 | `uav_api/classes/peripherical.py` | Pydantic model: `Servo_output` |
 | `uav_api/classes/attitude.py` | Pydantic model: `Attitude_target` (used internally by `Plane.set_attitude()`) |
 | `uav_api/classes/script.py` | Pydantic model: `Script` |
