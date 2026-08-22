@@ -1,6 +1,7 @@
 from argparse import Namespace
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from uav_api.vehicles.plane import Plane
+from uav_api.classes.responses import UavResponse
 from uav_api.routers.dependencies import get_plane_instance, get_args
 
 router = APIRouter(
@@ -9,7 +10,7 @@ router = APIRouter(
 )
 
 
-@router.get("/arm", tags=["command"], summary="Switches to GUIDED, waits ready-to-arm, and arms the plane")
+@router.get("/arm", tags=["command"], summary="Switches to GUIDED, waits ready-to-arm, and arms the plane", response_model=UavResponse)
 def arm(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         uav.change_mode("GUIDED")
@@ -21,7 +22,7 @@ def arm(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_
     return {"device": "uav", "id": str(args.sysid), "result": result}
 
 
-@router.get("/disarm", tags=["command"], summary="Disarms the plane")
+@router.get("/disarm", tags=["command"], summary="Disarms the plane", response_model=UavResponse)
 def disarm(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         uav.disarm_vehicle()
@@ -30,8 +31,8 @@ def disarm(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(g
     return {"device": "uav", "id": str(args.sysid), "result": "Disarmed vehicle"}
 
 
-@router.get("/takeoff", tags=["command"], summary="Takes off to the specified altitude (fixed-wing or VTOL)")
-def takeoff(alt: float, pitch_deg: float = 15, vtol: bool = False,
+@router.get("/takeoff", tags=["command"], summary="Takes off to the specified altitude (fixed-wing or VTOL)", response_model=UavResponse)
+def takeoff(alt: float = Query(..., gt=0, le=1000), pitch_deg: float = 15, vtol: bool = False,
             uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         uav.takeoff(alt, pitch_deg=pitch_deg, vtol=vtol)
@@ -41,7 +42,7 @@ def takeoff(alt: float, pitch_deg: float = 15, vtol: bool = False,
             "result": f"Takeoff successful! Vehicle at {alt} meters"}
 
 
-@router.get("/land", tags=["command"], summary="Switches to LAND mode (assumes a runway-aligned approach is already arranged)")
+@router.get("/land", tags=["command"], summary="Switches to LAND mode (assumes a runway-aligned approach is already arranged)", response_model=UavResponse)
 def land(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         uav.land()
@@ -50,8 +51,8 @@ def land(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get
     return {"device": "uav", "id": str(args.sysid), "result": "Landed successfully"}
 
 
-@router.get("/land_at", tags=["command"], summary="Uploads a simple landing mission at the given point and starts it in AUTO mode (returns immediately)")
-def land_at(lat: float, long: float, alt: float = 0, vtol: bool = False,
+@router.get("/land_at", tags=["command"], summary="Uploads a simple landing mission at the given point and starts it in AUTO mode (returns immediately)", response_model=UavResponse)
+def land_at(lat: float = Query(..., ge=-90, le=90), long: float = Query(..., ge=-180, le=180), alt: float = Query(0, ge=0, le=10000), vtol: bool = False,
             uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         uav.land_at(lat, long, alt, vtol=vtol)
@@ -61,7 +62,7 @@ def land_at(lat: float, long: float, alt: float = 0, vtol: bool = False,
             "result": f"Landing mission started for coord ({lat}, {long})"}
 
 
-@router.get("/rtl", tags=["command"], summary="Switches to RTL and returns when plane is near home")
+@router.get("/rtl", tags=["command"], summary="Switches to RTL and returns when plane is near home", response_model=UavResponse)
 def rtl(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         uav.do_RTL()
@@ -70,7 +71,7 @@ def rtl(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_
     return {"device": "uav", "id": str(args.sysid), "result": "Returned to launch"}
 
 
-@router.get("/set_home", tags=["command"], summary="Sets the HOME position to the vehicle's current position")
+@router.get("/set_home", tags=["command"], summary="Sets the HOME position to the vehicle's current position", response_model=UavResponse)
 def set_home(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
     try:
         uav.set_home()

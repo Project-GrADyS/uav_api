@@ -361,6 +361,8 @@ Open the interactive Swagger UI in your browser:
 http://localhost:<port>/docs
 ```
 
+> As of 0.3.0 all routes declare response models — a consistent `device`/`id`/`result` envelope — and flight-critical inputs (speeds, altitudes, GPS coordinates, servo PWM) are bounds-checked, returning 422 before anything reaches MAVLink. See [`docs/api-specification.md`](docs/api-specification.md) for the full contract.
+
 <img src="https://github.com/user-attachments/assets/6ef0d0b1-4dd7-4049-b16e-f3b509ab1b94" />
 
 Scroll to the **telemetry** router and call `GET /telemetry/general`:

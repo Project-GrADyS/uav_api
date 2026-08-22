@@ -13,7 +13,22 @@
 Base URL: `http://localhost:<port>`
 Interactive docs: `http://localhost:<port>/docs`
 
-All successful responses include `"device": "uav"` and `"id": "<sysid>"`. Failures raise HTTP 500 with a descriptive `"detail"` string.
+## Envelope
+
+All successful responses include `"device": "uav"`, `"id": "<sysid>"` (a
+string) and `"result"`. On `/command`, `/movement` and `/peripherical`,
+`result` is a human-readable sentence describing the outcome; on `/telemetry`
+and `/mission` it is the literal string `"success"`. Every route declares a
+response model, so response shapes are fully described in the OpenAPI schema
+at `/docs`.
+
+Failures raise an HTTP error status (400/404/422/500/504) with a descriptive
+`"detail"` string; 422 is returned for out-of-range inputs (see the parameter
+bounds on each endpoint) before anything reaches MAVLink.
+
+The `/mission` responses additionally carry a numeric `type` code (42-52).
+**These codes are deprecated**: they predate the `result` envelope and will
+be removed in a future release.
 
 ---
 
@@ -36,7 +51,7 @@ Sends a takeoff command. Blocks until the vehicle reaches the target altitude.
 
 | Query param | Type | Default | Description |
 |-------------|------|---------|-------------|
-| `alt` | int | 15 | Target altitude in meters |
+| `alt` | int | 15 | Target altitude in meters (must be 1–500) |
 
 **Response:**
 ```json
@@ -93,7 +108,7 @@ Set the respective speed in m/s.
 
 | Query param | Type | Description |
 |-------------|------|-------------|
-| `new_v` | int | New speed value in m/s |
+| `new_v` | int | New speed value in m/s (must be 0–50) |
 
 **Response:**
 ```json
@@ -107,7 +122,7 @@ Sets the `SIM_SPEEDUP` MAVLink parameter. Only meaningful in SITL simulated mode
 
 | Query param | Type | Description |
 |-------------|------|-------------|
-| `sim_factor` | float | Simulation time multiplier |
+| `sim_factor` | float | Simulation time multiplier (must be > 0) |
 
 **Response:**
 ```json
@@ -229,7 +244,7 @@ Sets the vehicle's heading (yaw) to the specified angle in degrees. Non-blocking
 
 | Query param | Type | Description |
 |-------------|------|-------------|
-| `heading` | float | Target heading in degrees (0–360, 0 = North, 90 = East) |
+| `heading` | float | Target heading in degrees (0–360 enforced, 0 = North, 90 = East) |
 
 **Response:**
 ```json
@@ -254,14 +269,14 @@ Spins the vehicle continuously at the specified angular speed. Positive values r
 
 ## /telemetry — Sensor Data
 
-All endpoints use **GET** and return `"result": "Success"` plus an `"info"` object.
+All endpoints use **GET** and return `"result": "success"` plus an `"info"` object.
 
 ### `GET /telemetry/general`
 General flight state from the `VFR_HUD` MAVLink message.
 
 ```json
 {
-  "device": "uav", "id": "1", "result": "Success",
+  "device": "uav", "id": "1", "result": "success",
   "info": {
     "airspeed": 0.0,
     "groundspeed": 0.02,
@@ -375,7 +390,7 @@ HOME position (the NED coordinate origin). Set at arming time or via `/command/s
 
 ```json
 {
-  "device": "uav", "id": "1", "result": "Success",
+  "device": "uav", "id": "1", "result": "success",
   "lat": -15.84, "lon": -47.92, "altitude": 1063.0,
   "x": 0.0, "y": 0.0, "z": 0.0
 }
@@ -394,7 +409,7 @@ Uploads a Python or shell script to `scripts_path`. Multipart form upload.
 
 **Response:**
 ```json
-{"device": "uav", "id": "1", "type": 44, "info": "Mission File 'my_script.py' saved at ~/.uav_api/scripts/my_script.py successfully."}
+{"device": "uav", "id": "1", "result": "success", "type": 44, "info": "Mission File 'my_script.py' saved at ~/.uav_api/scripts/my_script.py successfully."}
 ```
 
 **Errors:** 400 if wrong extension; 500 if file save fails.
@@ -406,7 +421,7 @@ Lists all `.py` files currently in `scripts_path`.
 
 **Response:**
 ```json
-{"device": "uav", "id": "1", "type": 42, "scripts": ["my_script.py", "square.py"]}
+{"device": "uav", "id": "1", "result": "success", "type": 42, "scripts": ["my_script.py", "square.py"]}
 ```
 
 ---
@@ -422,7 +437,7 @@ Executes an uploaded script in a uniquely-named tmux session and tracks it in an
 
 **Response:**
 ```json
-{"device": "uav", "id": "1", "type": 46, "script": "my_script.py"}
+{"device": "uav", "id": "1", "result": "success", "type": 46, "script": "my_script.py"}
 ```
 
 **Behavior:**
@@ -443,7 +458,7 @@ Returns the scripts currently in `status="running"` according to the in-memory s
 **Response:**
 ```json
 {
-  "device": "uav", "id": "1", "type": 50,
+  "device": "uav", "id": "1", "result": "success", "type": 50,
   "scripts": [
     {
       "script": "my_script.py",
@@ -471,7 +486,7 @@ Stops a running mission script. Sends `Ctrl+C` to the tmux session (allowing `fi
 
 **Response:**
 ```json
-{"device": "uav", "id": "1", "type": 52, "script": "my_script.py", "info": "Stopped"}
+{"device": "uav", "id": "1", "result": "success", "type": 52, "script": "my_script.py", "info": "Stopped"}
 ```
 
 **Errors:** 404 if the script is unknown to the scripts table; 400 if it is in the table but not currently running.
@@ -483,7 +498,7 @@ Deletes all `.py` and `.sh` files from the scripts directory.
 
 **Response:**
 ```json
-{"device": "uav", "id": "1", "type": 48, "info": "Removed 2 script(s)", "removed": ["a.py", "b.sh"]}
+{"device": "uav", "id": "1", "result": "success", "type": 48, "info": "Removed 2 script(s)", "removed": ["a.py", "b.sh"]}
 ```
 
 ---
@@ -520,8 +535,8 @@ Sends a PWM signal to a servo motor connected to one of the flight controller's 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `channel` | int | Servo channel (1-based, matches the flight controller actuator port) |
-| `pwm` | int | PWM value in microseconds (typically 1000–2000) |
+| `channel` | int | Servo channel (1–16, matches the flight controller actuator port) |
+| `pwm` | int | PWM value in microseconds (must be 800–2200; typical servos use 1000–2000) |
 
 **Response:**
 ```json

@@ -9,13 +9,21 @@ from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from uav_api.routers.dependencies import get_args, get_scripts_table
 from uav_api.classes.script import Script
+from uav_api.classes.responses import (
+    ClearScriptsResponse,
+    ExecuteScriptResponse,
+    ListScriptsResponse,
+    RunningScriptsResponse,
+    StopScriptResponse,
+    UploadScriptResponse,
+)
 
 router = APIRouter(
     prefix = "/mission",
     tags = ["mission"],
 )
 
-@router.post("/upload-script", tags=["mission"], summary="Uploads a mission script (.py file) to the UAV scripts directory")
+@router.post("/upload-script", tags=["mission"], summary="Uploads a mission script (.py file) to the UAV scripts directory", response_model=UploadScriptResponse)
 async def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
     # 1. Validate file extension
     if not (file.filename.endswith(".py") or file.filename.endswith(".sh")):
@@ -39,18 +47,18 @@ async def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
         # Always close the SpooledTemporaryFile
         await file.close()
 
-    return {"device": "uav", "id": str(args.sysid), "type": 44, "info": f"Mission File '{safe_filename}' saved at {target_path} successfully."}
+    return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 44, "info": f"Mission File '{safe_filename}' saved at {target_path} successfully."}
 
-@router.get("/list-scripts", tags=["mission"], summary="Lists all uploaded mission scripts")
+@router.get("/list-scripts", tags=["mission"], summary="Lists all uploaded mission scripts", response_model=ListScriptsResponse)
 def list_scripts(args = Depends(get_args)):
     try:
         scripts = [f.name for f in (Path(args.scripts_path).expanduser()).glob("*.py") if f.is_file()]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not list scripts: {e}")
 
-    return {"device": "uav", "id": str(args.sysid), "type": 42, "scripts": scripts}
+    return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 42, "scripts": scripts}
 
-@router.post("/execute-script/", tags=["mission"], summary="Executes a specified mission script")
+@router.post("/execute-script/", tags=["mission"], summary="Executes a specified mission script", response_model=ExecuteScriptResponse)
 def execute_script(script: Script, args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
     # Prevent directory traversal and extract a simple filename
     safe_name = Path(script.script_name).name
@@ -96,11 +104,12 @@ def execute_script(script: Script, args = Depends(get_args), scripts_table = Dep
     return {
         "device": "uav",
         "id": str(args.sysid),
+        "result": "success",
         "type": 46,
         "script": safe_name,
     }
 
-@router.get("/running-scripts", tags=["mission"], summary="Lists scripts currently running")
+@router.get("/running-scripts", tags=["mission"], summary="Lists scripts currently running", response_model=RunningScriptsResponse)
 def running_scripts(args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
     scripts = [
         {
@@ -113,9 +122,9 @@ def running_scripts(args = Depends(get_args), scripts_table = Depends(get_script
         for name, info in scripts_table.items()
         if info.get("status") == "running"
     ]
-    return {"device": "uav", "id": str(args.sysid), "type": 50, "scripts": scripts}
+    return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 50, "scripts": scripts}
 
-@router.post("/stop-script/", tags=["mission"], summary="Stops a running mission script")
+@router.post("/stop-script/", tags=["mission"], summary="Stops a running mission script", response_model=StopScriptResponse)
 def stop_script(script: Script, args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
     safe_name = Path(script.script_name).name
     if not safe_name.endswith(".py"):
@@ -136,9 +145,9 @@ def stop_script(script: Script, args = Depends(get_args), scripts_table = Depend
     info["status"] = "stopped"
     info["stopped_at"] = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    return {"device": "uav", "id": str(args.sysid), "type": 52, "script": safe_name, "info": "Stopped"}
+    return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 52, "script": safe_name, "info": "Stopped"}
 
-@router.delete("/clear-scripts", tags=["mission"], summary="Removes all script files (.py and .sh) from the scripts directory")
+@router.delete("/clear-scripts", tags=["mission"], summary="Removes all script files (.py and .sh) from the scripts directory", response_model=ClearScriptsResponse)
 def clear_scripts(args = Depends(get_args)):
     scripts_dir = Path(args.scripts_path).expanduser()
     try:
@@ -150,5 +159,5 @@ def clear_scripts(args = Depends(get_args)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"CLEAR SCRIPTS FAIL: {e}")
 
-    return {"device": "uav", "id": str(args.sysid), "type": 48,
+    return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 48,
             "info": f"Removed {len(removed)} script(s)", "removed": removed}

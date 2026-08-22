@@ -10,6 +10,7 @@ from starlette.background import BackgroundTask
 
 from uav_api.vehicles.copter import Copter
 from uav_api.classes.peripherical import Servo_output
+from uav_api.classes.responses import UavResponse
 from uav_api.routers.dependencies import get_copter_instance, get_args
 
 router = APIRouter(
@@ -86,7 +87,8 @@ def take_photo(
 
 
 @router.post("/servo_output", tags=["peripherical"],
-                           summary="Sends a PWM signal to a servo motor")
+                           summary="Sends a PWM signal to a servo motor",
+                           response_model=UavResponse)
 def servo_output(servo: Servo_output,
                  uav: Copter = Depends(get_copter_instance),
                  args: Namespace = Depends(get_args)):

@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Response models on all 55 routes** (`uav_api/classes/responses.py`): the
+  envelope is now machine-readable in the OpenAPI schema. Canonical shape:
+  `device`/`id`/`result` on every JSON response. Telemetry `result` is
+  normalized to lowercase `"success"` (previously a mix of `"Success"` and
+  `"success"`); mission responses gain `result` while keeping their numeric
+  `type` codes (42–52), now **deprecated** and scheduled for removal in a
+  future release. `/peripherical/take_photo` (a JPEG FileResponse) is
+  exempt.
+- **Input validation on flight-critical parameters**, returning 422 before
+  anything reaches MAVLink: GPS bodies (`lat` ±90, `long` ±180, `alt`
+  0–10000 m), speed endpoints (0–50 m/s), copter takeoff (1–500 m), plane
+  takeoff (up to 1000 m), `land_at` coordinates, heading (0–360), servo
+  `channel` (1–16) and `pwm` (800–2200).
 - `--terminal`: the terminal command SITL is wrapped in (default `xterm -e`),
   following ArduPilot's `SITL_RITW_TERMINAL` convention — e.g.
   `--terminal 'gnome-terminal --'`. Ignored with `--headless`.
@@ -71,6 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes from hanging forever to raising a timeout error.
 
 ### Fixed
+- Removed the phantom `timeout` query parameter that `GET /command/land`
+  advertised but never read, and the unused inline `Movement` model in the
+  copter command router.
 - The SITL launch command is now built as an argv list end-to-end instead of
   an f-string later split on spaces: no more empty argv entries from the
   double space after `--out`, and paths containing spaces
