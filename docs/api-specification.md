@@ -515,11 +515,13 @@ Takes a photo using a whitelisted camera CLI tool. The tool must be installed on
 | `command` | `str` | *(required)* | Camera tool to use. Allowed: `fswebcam`, `rpicam-still`, `libcamera-still` |
 | `resolution` | `str` | `1280x720` | Capture resolution in `WIDTHxHEIGHT` format |
 | `capture_time` | `int` | `150` | Capture delay / warm-up in milliseconds |
+| `focus_distance` | `float` | *(none)* | Disables autofocus and sets the lens position to `1/focus_distance` (focal distance in meters, must be > 0). `rpicam-still`/`libcamera-still` only |
 
 **Response:** `image/jpeg` file (`Content-Disposition: attachment; filename="photo.jpg"`)
 
 **Errors:**
 - `400` — disallowed command or invalid resolution format
+- `422` — `focus_distance` is zero or negative
 - `500` — capture command failed (stderr included in detail)
 - `504` — command timed out (fixed 30s limit)
 

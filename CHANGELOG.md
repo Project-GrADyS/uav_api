@@ -84,6 +84,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes from hanging forever to raising a timeout error.
 
 ### Fixed
+- `GET /peripherical/take_photo` no longer fails with an internal `TypeError`
+  whenever `focus_distance` is provided (the manual-focus flags were appended
+  with a broken `list.append` call). The parameter is now a `float` (sub-meter
+  focus distances work) validated as `> 0`, so `focus_distance=0` returns 422
+  instead of hitting a `ZeroDivisionError`.
 - `POST /mission/execute-script/` no longer reports success when the script
   never started: a non-zero tmux exit now returns 500 with tmux's stderr in
   the detail, a missing tmux binary returns 503 instead of an unhandled

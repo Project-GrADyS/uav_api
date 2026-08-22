@@ -20,7 +20,7 @@ router = APIRouter(
 
 ALLOWED_COMMANDS = {"fswebcam", "rpicam-still", "libcamera-still"}
 
-def _build_cmd(command: str, resolution: str, capture_time: int, focus_distance: float, output_path: str) -> list[str]:
+def _build_cmd(command: str, resolution: str, capture_time: int, focus_distance: float | None, output_path: str) -> list[str]:
     """Build the capture command list for the given tool."""
     match = re.match(r"^(\d+)x(\d+)$", resolution)
     if not match:
@@ -36,7 +36,7 @@ def _build_cmd(command: str, resolution: str, capture_time: int, focus_distance:
         t_ms = str(capture_time) if capture_time > 0 else "1"
         cmd = [command, "--width", w, "--height", h, "--shutter", t_ms, "-o", output_path]
         if focus_distance is not None:
-            cmd.append("--autofocus-mode", "manual", "--lens-position",str(1/focus_distance))
+            cmd += ["--autofocus-mode", "manual", "--lens-position", str(1 / focus_distance)]
     else:
         raise ValueError(f"Unknown command: {command}")
     return cmd
@@ -48,7 +48,7 @@ def take_photo(
     command: str = Query(..., description="Camera tool to use. Allowed: fswebcam, rpicam-still, libcamera-still"),
     resolution: str = Query("1280x720", description="Capture resolution (WIDTHxHEIGHT)"),
     capture_time: int = Query(150, ge=0, description="Capture delay / warm-up in milliseconds"),
-    focus_distance: int = Query(None, description="If provided, turns off autofocus and uses the parameter valua as the focal distance. (Currently only works with libcamera-still)")
+    focus_distance: float | None = Query(None, gt=0, description="If provided, turns off autofocus and uses the parameter value as the focal distance in meters. (Currently only works with rpicam-still/libcamera-still)")
 ):
     if command not in ALLOWED_COMMANDS:
         raise HTTPException(status_code=400,

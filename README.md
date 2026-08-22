@@ -580,6 +580,7 @@ Take a photo using a whitelisted camera CLI tool. The chosen tool **must be inst
 | `command` | *(required)* | One of: `fswebcam`, `rpicam-still`, `libcamera-still` |
 | `resolution` | `1280x720` | Capture resolution (`WIDTHxHEIGHT`) |
 | `capture_time` | `150` | Warm-up / exposure delay in milliseconds |
+| `focus_distance` | *(none)* | Disables autofocus, sets lens position to `1/focus_distance` (meters, > 0). `rpicam-still`/`libcamera-still` only |
 
 **Examples:**
 ```bash

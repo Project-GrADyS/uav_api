@@ -12,18 +12,21 @@ import pytest
 
 from unit_helpers import assert_envelope
 
+from uav_api.routers.common.peripherical import _build_cmd
+
 pytestmark = pytest.mark.copter
 
 
 @pytest.fixture
 def camera_calls(monkeypatch):
     """Record camera invocations and write fake JPEG bytes to the output path
-    (the temp file path is the last element of every whitelisted command)."""
+    (last element for fswebcam, the value after -o for rpicam/libcamera)."""
     calls = []
 
     def fake_run(cmd, **kwargs):
         calls.append(list(cmd))
-        Path(cmd[-1]).write_bytes(b"JPEGDATA")
+        out = cmd[cmd.index("-o") + 1] if "-o" in cmd else cmd[-1]
+        Path(out).write_bytes(b"JPEGDATA")
         return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
 
     monkeypatch.setattr("uav_api.routers.common.peripherical.subprocess.run", fake_run)
@@ -71,6 +74,38 @@ class TestTakePhoto:
         r = copter_client.get("/peripherical/take_photo", params={"command": "fswebcam"})
         assert r.status_code == 500
         assert "no camera detected" in r.json()["detail"]
+
+    def test_take_photo_with_focus_distance(self, copter_client, camera_calls):
+        r = copter_client.get(
+            "/peripherical/take_photo",
+            params={"command": "rpicam-still", "focus_distance": 2},
+        )
+        assert r.status_code == 200
+        assert r.content == b"JPEGDATA"
+        assert "--lens-position" in camera_calls[0]
+
+    @pytest.mark.parametrize("focus_distance", [0, -1])
+    def test_focus_distance_zero_or_negative_is_422(
+        self, copter_client, camera_calls, focus_distance
+    ):
+        r = copter_client.get(
+            "/peripherical/take_photo",
+            params={"command": "rpicam-still", "focus_distance": focus_distance},
+        )
+        assert r.status_code == 422
+        assert camera_calls == []
+
+
+class TestBuildCmd:
+    def test_focus_distance_adds_manual_focus_flags(self):
+        cmd = _build_cmd("libcamera-still", "1280x720", 150, 2.0, "/tmp/x.jpg")
+        i = cmd.index("--autofocus-mode")
+        assert cmd[i:i + 4] == ["--autofocus-mode", "manual", "--lens-position", "0.5"]
+        assert cmd[cmd.index("-o") + 1] == "/tmp/x.jpg"
+
+    def test_no_focus_distance_omits_focus_flags(self):
+        cmd = _build_cmd("libcamera-still", "1280x720", 150, None, "/tmp/x.jpg")
+        assert "--autofocus-mode" not in cmd
 
 
 class TestServoOutput:
