@@ -1,0 +1,142 @@
+# One-click release: bump the version, tag, build, publish to PyPI (trusted
+# publishing) and create the GitHub release.
+#
+# One-time setup this workflow depends on:
+#   - PyPI project uav-api -> Manage -> Publishing: trusted publisher for
+#     Project-GrADyS/uav_api, workflow release.yml, environment pypi.
+#   - Repo Settings -> Environments: an environment named "pypi" (optionally
+#     with a required reviewer, which gates the upload behind an approval).
+#
+# The release commit is pushed to main with GITHUB_TOKEN. If main ever gets a
+# PRs-required protection rule, grant the GitHub Actions app a ruleset bypass.
+# (GITHUB_TOKEN pushes do not re-trigger ci.yml on the release commit; the
+# checks job already ran on the same tree.)
+#
+# If publish or github-release fails after the tag was pushed, use "Re-run
+# failed jobs" — the run's artifacts are reused, so the bump/tag is not
+# repeated. Do not start a fresh run for the same version; the tag-exists
+# check will (correctly) stop it.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump (none = release the version pyproject.toml already declares)"
+        type: choice
+        required: true
+        default: patch
+        options: [none, patch, minor, major]
+      dry_run:
+        description: "Build only; no push, no publish, no release"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history + tags, for the tag-exists check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bump version
+        id: bump
+        run: |
+          V=$(python scripts/release_bump.py bump "${{ inputs.bump }}")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse already-released versions
+        env:
+          V: ${{ steps.bump.outputs.version }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
+            echo "::error::tag v$V already exists"
+            exit 1
+          fi
+          # 404 means the project has never been published, which is fine.
+          RELEASED=$(curl -fsS "https://pypi.org/pypi/uav-api/json" \
+            | python -c "import sys, json; print(*json.load(sys.stdin)['releases'])" \
+            || true)
+          case " $RELEASED " in
+            *" $V "*) echo "::error::uav-api $V is already on PyPI"; exit 1 ;;
+          esac
+
+      - name: Extract release notes
+        run: python scripts/release_bump.py notes "${{ steps.bump.outputs.version }}" > "$RUNNER_TEMP/notes.md"
+
+      - name: Build
+        run: |
+          pip install build
+          python -m build
+          pipx run twine check dist/*
+
+      - name: Commit and tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          V: ${{ steps.bump.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml uav_api/api_app.py CHANGELOG.md
+          git commit -m "chore/release $V"
+          git tag -a "v$V" -m "uav_api $V"
+          git push origin main "v$V"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: ${{ runner.temp }}/notes.md
+
+  publish:
+    needs: release
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # OIDC for PyPI trusted publishing; deliberately nothing else
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    # Runs only after PyPI succeeds, so a failed upload never leaves a release.
+    needs: [release, publish]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4  # all artifacts, one subdir each
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.release.outputs.version }}
+        run: |
+          gh release create "v$V" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "v$V" \
+            --notes-file notes/notes.md
