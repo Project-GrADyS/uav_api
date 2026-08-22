@@ -11,6 +11,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from uav_api.routers.dependencies import get_args, get_scripts_table
 from uav_api.classes.script import Script
 from uav_api.classes.responses import (
+    error_responses,
     ClearScriptsResponse,
     ExecuteScriptResponse,
     ListScriptsResponse,
@@ -24,8 +25,11 @@ router = APIRouter(
     tags = ["mission"],
 )
 
-@router.post("/upload-script", tags=["mission"], summary="Uploads a mission script (.py file) to the UAV scripts directory", response_model=UploadScriptResponse)
-def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
+@router.post("/upload-script", tags=["mission"], summary="Uploads a mission script (.py file) to the UAV scripts directory", response_model=UploadScriptResponse, responses=error_responses({400: "The uploaded file is not a .py or .sh file.", 500: "The file could not be saved to the scripts directory."}))
+def upload_script(file: UploadFile = File(..., description="Script file to upload. Only .py and .sh files are accepted; any directory components in the filename are stripped."), args = Depends(get_args)):
+    """Saves the file into the scripts directory (--scripts_path,
+    default <root_dir>/scripts), overwriting any existing file with the same
+    name. Run it afterwards with /mission/execute-script/."""
     # 1. Validate file extension
     if not (file.filename.endswith(".py") or file.filename.endswith(".sh")):
         raise HTTPException(status_code=400, detail="Only .py and .sh files are allowed.")
@@ -50,8 +54,10 @@ def upload_script(file: UploadFile = File(...), args = Depends(get_args)):
 
     return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 44, "info": f"Mission File '{safe_filename}' saved at {target_path} successfully."}
 
-@router.get("/list-scripts", tags=["mission"], summary="Lists all uploaded mission scripts", response_model=ListScriptsResponse)
+@router.get("/list-scripts", tags=["mission"], summary="Lists all uploaded mission scripts", response_model=ListScriptsResponse, responses=error_responses({500: "The scripts directory could not be read."}))
 def list_scripts(args = Depends(get_args)):
+    """Lists the .py files in the scripts directory (uploaded .sh files are
+    not included)."""
     try:
         scripts = [f.name for f in (Path(args.scripts_path).expanduser()).glob("*.py") if f.is_file()]
     except Exception as e:
@@ -59,8 +65,12 @@ def list_scripts(args = Depends(get_args)):
 
     return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 42, "scripts": scripts}
 
-@router.post("/execute-script/", tags=["mission"], summary="Executes a specified mission script", response_model=ExecuteScriptResponse)
+@router.post("/execute-script/", tags=["mission"], summary="Executes a specified mission script", response_model=ExecuteScriptResponse, responses=error_responses({400: "The script is already running.", 404: "The script was not found in the scripts directory.", 500: "tmux failed to start the session.", 503: "tmux is not installed on the vehicle."}))
 def execute_script(script: Script, args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
+    """Starts the script in a detached tmux session using the interpreter from
+    --python_path. Returns immediately; poll /mission/running-scripts for
+    status. stdout/stderr are captured to timestamped files under
+    --script_logs (paths reported by /mission/running-scripts)."""
     # Prevent directory traversal and extract a simple filename
     safe_name = Path(script.script_name).name
     # Ensure .py extension
@@ -127,6 +137,8 @@ def execute_script(script: Script, args = Depends(get_args), scripts_table = Dep
 
 @router.get("/running-scripts", tags=["mission"], summary="Lists scripts currently running", response_model=RunningScriptsResponse)
 def running_scripts(args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
+    """Each entry carries the tmux session name and the stdout/stderr log
+    paths on the vehicle."""
     scripts = [
         {
             "script": name,
@@ -140,8 +152,10 @@ def running_scripts(args = Depends(get_args), scripts_table = Depends(get_script
     ]
     return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 50, "scripts": scripts}
 
-@router.post("/stop-script/", tags=["mission"], summary="Stops a running mission script", response_model=StopScriptResponse)
+@router.post("/stop-script/", tags=["mission"], summary="Stops a running mission script", response_model=StopScriptResponse, responses=error_responses({400: "The script is not running.", 404: "The script was never executed (not in the scripts table)."}))
 def stop_script(script: Script, args = Depends(get_args), scripts_table = Depends(get_scripts_table)):
+    """Sends SIGINT first so the script's cleanup handlers can run (e.g. land
+    the drone), waits one second, then kills the tmux session."""
     safe_name = Path(script.script_name).name
     if not safe_name.endswith(".py"):
         safe_name = safe_name + ".py"
@@ -163,8 +177,9 @@ def stop_script(script: Script, args = Depends(get_args), scripts_table = Depend
 
     return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 52, "script": safe_name, "info": "Stopped"}
 
-@router.delete("/clear-scripts", tags=["mission"], summary="Removes all script files (.py and .sh) from the scripts directory", response_model=ClearScriptsResponse)
+@router.delete("/clear-scripts", tags=["mission"], summary="Removes all script files (.py and .sh) from the scripts directory", response_model=ClearScriptsResponse, responses=error_responses({500: "A script file could not be removed."}))
 def clear_scripts(args = Depends(get_args)):
+    """Deletes the files only; running tmux sessions are not touched."""
     scripts_dir = Path(args.scripts_path).expanduser()
     try:
         removed = []

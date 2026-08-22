@@ -1,3 +1,5 @@
+from importlib.metadata import PackageNotFoundError, version as package_version
+
 from fastapi import FastAPI
 
 from uav_api.routers.copter import command as copter_command, movement as copter_movement, telemetry as copter_telemetry
@@ -18,21 +20,39 @@ metadata = [
 {
     "name": "telemetry",
     "description": "Provides telemetry of the UAV"
+},
+{
+    "name": "mission",
+    "description": "Uploads and runs mission scripts on the vehicle's companion computer (each script runs in its own tmux session). Copter mode only."
+},
+{
+    "name": "peripherical",
+    "description": "Controls onboard peripherals: camera capture and servo outputs. Copter mode only."
 }
 ]
 
+def _api_version() -> str:
+    try:
+        return package_version("uav_api")
+    except PackageNotFoundError:
+        # Running from a source tree without an installed distribution.
+        return "0.3.0"
+
 def create_app(args) -> FastAPI:
     description = f"""
+Uav_API exposes HTTP endpoints to control an ArduPilot vehicle — real or SITL — over MAVLink.
+
 ## {args.vehicle.upper()} INFORMATION
-* SYSID = **{args.sysid}**
-* CONNECTION_STRING = **{args.uav_connection}**
+* SYSID = **{args.sysid}** (returned as the `id` field of every response)
+* CONNECTION_STRING = **{args.uav_connection}** (connection type: **{args.connection_type}**)
+* SIMULATED = **{args.simulated}**
 """
 
     app = FastAPI(
         title="Uav_API",
         summary="API designed to simplify vehicle control for Ardupilot UAVs.",
         description=description,
-        version="0.3.0",
+        version=_api_version(),
         openapi_tags=metadata,
         lifespan=lifespan
     )

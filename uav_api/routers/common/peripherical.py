@@ -10,7 +10,7 @@ from starlette.background import BackgroundTask
 
 from uav_api.vehicles.copter import Copter
 from uav_api.classes.peripherical import Servo_output
-from uav_api.classes.responses import UavResponse
+from uav_api.classes.responses import COMMAND_FAILED, UavResponse, error_responses
 from uav_api.routers.dependencies import get_copter_instance, get_args
 
 router = APIRouter(
@@ -43,7 +43,16 @@ def _build_cmd(command: str, resolution: str, capture_time: int, focus_distance:
 
 
 @router.get("/take_photo", tags=["peripherical"],
-                          summary="Takes a photo using a whitelisted camera CLI tool")
+                          summary="Takes a photo using a whitelisted camera CLI tool",
+                          response_class=FileResponse,
+                          responses={
+                              200: {"content": {"image/jpeg": {}}, "description": "The captured photo as a JPEG file (photo.jpg)."},
+                              **error_responses({
+                                  400: "The camera tool is not whitelisted, or the resolution format is invalid.",
+                                  500: "The camera tool produced no image.",
+                                  504: "The camera tool did not finish within 30 seconds.",
+                              }),
+                          })
 def take_photo(
     command: str = Query(..., description="Camera tool to use. Allowed: fswebcam, rpicam-still, libcamera-still"),
     resolution: str = Query("1280x720", description="Capture resolution (WIDTHxHEIGHT)"),
@@ -88,10 +97,14 @@ def take_photo(
 
 @router.post("/servo_output", tags=["peripherical"],
                            summary="Sends a PWM signal to a servo motor",
-                           response_model=UavResponse)
+                           response_model=UavResponse,
+                           responses=COMMAND_FAILED)
 def servo_output(servo: Servo_output,
                  uav: Copter = Depends(get_copter_instance),
                  args: Namespace = Depends(get_args)):
+    """Drives the given servo output channel with MAV_CMD_DO_SET_SERVO. The
+    channel must not be assigned to a flight function (motors, control
+    surfaces) or ArduPilot will ignore the command."""
     try:
         uav.set_servo(servo.channel, servo.pwm)
     except Exception as e:
