@@ -1,14 +1,26 @@
+import math
+
 from argparse import Namespace
 from fastapi import APIRouter, Depends, HTTPException, Query
 from uav_api.vehicles.copter import Copter
 from uav_api.routers.dependencies import get_copter_instance, get_args
-from uav_api.classes.movement import Gps_pos, Local_pos, Local_velocity
+from uav_api.classes.movement import Body_pos, Gps_pos, Local_pos, Local_velocity
 from uav_api.classes.responses import UavResponse
 
 router = APIRouter(
     prefix = "/movement",
     tags = ["movement"],
 )
+
+def _body_frd_to_ned_target(current, heading_deg: float, front: float, right: float, down: float) -> Local_pos:
+    """Rotate a body-FRD offset by the vehicle heading into an absolute NED target.
+
+    ArduPilot resolves a BODY_FRD setpoint against attitude at receipt time, so
+    the caller must sample heading *before* sending the setpoint."""
+    yaw = math.radians(heading_deg)
+    north = front * math.cos(yaw) - right * math.sin(yaw)
+    east = front * math.sin(yaw) + right * math.cos(yaw)
+    return Local_pos(x=current.x + north, y=current.y + east, z=current.z + down)
 
 @router.post("/go_to_gps/", tags=["movement"], summary="Moves the copter to specified GPS position", response_model=UavResponse)
 def go_to_gps(pos: Gps_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
@@ -60,6 +72,29 @@ def drive_wait(pos: Local_pos, uav: Copter = Depends(get_copter_instance), args:
         current_pos = uav.get_ned_position()
         uav.drive_ned(pos.x, pos.y, pos.z, look_at_target=pos.look_at_target)
         target_pos = Local_pos(x=current_pos.x + pos.x, y=current_pos.y + pos.y, z=current_pos.z + pos.z)
+        uav.wait_ned_position(target_pos)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DRIVE FAIL: {e}")
+    return {"device": "uav", "id": str(args.sysid), "result": f"Copter arrived at ({target_pos.x}, {target_pos.y}, {target_pos.z})"}
+
+@router.post("/drive_body", tags=["movement"], summary="Drives copter the specified amount in meters in the body FRD frame (front/right/down)", response_model=UavResponse)
+def drive_body(pos: Body_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
+    try:
+        uav.drive_body_frd(pos.front, pos.right, pos.down, look_at_target=pos.look_at_target)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DRIVE FAIL: {e}")
+    return {"device": "uav", "id": str(args.sysid), "result": "Copter is driving"}
+
+@router.post("/drive_body_wait", tags=["movement"], summary="Drives and waits copter the specified amount in meters in the body FRD frame (front/right/down)", response_model=UavResponse)
+def drive_body_wait(pos: Body_pos, uav: Copter = Depends(get_copter_instance), args: Namespace = Depends(get_args)):
+    try:
+        # Sample position and heading before sending the setpoint: the frame is
+        # fixed by the vehicle's attitude at receipt, and with look_at_target
+        # the vehicle starts yawing immediately after.
+        current_pos = uav.get_ned_position()
+        heading = uav.get_general_info().heading
+        target_pos = _body_frd_to_ned_target(current_pos, heading, pos.front, pos.right, pos.down)
+        uav.drive_body_frd(pos.front, pos.right, pos.down, look_at_target=pos.look_at_target)
         uav.wait_ned_position(target_pos)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DRIVE FAIL: {e}")

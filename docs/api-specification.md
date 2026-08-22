@@ -221,6 +221,34 @@ Same as `drive` but blocks until the vehicle reaches the computed target positio
 
 ---
 
+### `POST /movement/drive_body`
+Moves the vehicle by a relative offset in the body FRD frame: **F**ront, **R**ight, **D**own relative to the vehicle's current position **and heading**. `front=5` moves 5 m in whatever direction the vehicle is facing. Non-blocking.
+
+On the wire this uses [`MAV_FRAME_BODY_OFFSET_NED`](https://mavlink.io/en/messages/common.html#MAV_FRAME_BODY_OFFSET_NED) — ArduPilot does not accept its MAVLink successor `MAV_FRAME_BODY_FRD` (it holds position on unsupported frames); the semantics are identical.
+
+**Request body:**
+```json
+{"front": 5.0, "right": 0.0, "down": 0.0, "look_at_target": false}
+```
+> `down` is negative to climb, like NED `z`. Field names are `front`/`right`/`down` (model `Body_pos`), not `x`/`y`/`z`.
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "result": "Copter is driving"}
+```
+
+---
+
+### `POST /movement/drive_body_wait`
+Same as `drive_body` but blocks until the vehicle reaches the target position, computed by rotating the front/right offset by the heading sampled at send time.
+
+**Response:**
+```json
+{"device": "uav", "id": "1", "result": "Copter arrived at (15.0, 5.0, -15.0)"}
+```
+
+---
+
 ### `POST /movement/travel_at_ned`
 Sets the vehicle's velocity in NED frame. Non-blocking. The setpoint is sent **once**: ArduPilot stops the vehicle after `GUID_TIMEOUT` (3 s of sim time by default) if no fresh velocity setpoint arrives, so callers that want sustained travel must re-send this request periodically (faster than every 3 s).
 

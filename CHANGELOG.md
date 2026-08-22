@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `POST /movement/drive_body` and `POST /movement/drive_body_wait`: relative
+  movement in the body FRD frame (`MAV_FRAME_BODY_OFFSET_NED` on the wire —
+  ArduPilot rejects the newer `MAV_FRAME_BODY_FRD` name) — front/right/down
+  offsets resolved against the vehicle's current position **and heading**,
+  alongside the existing global-NED and offset-NED movement. New `Body_pos`
+  request model (`front`, `right`, `down`, `look_at_target`); the blocking
+  variant computes its arrival target by rotating the offset by the heading
+  sampled at send time. (#7)
 - **Response models on all 55 routes** (`uav_api/classes/responses.py`): the
   envelope is now machine-readable in the OpenAPI schema. Canonical shape:
   `device`/`id`/`result` on every JSON response. Telemetry `result` is

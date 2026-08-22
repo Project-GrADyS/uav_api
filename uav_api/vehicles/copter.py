@@ -288,3 +288,35 @@ class Copter(Vehicle):
             0,  # yaw heading (radians)
             0,  # yaw_rate (rad/s)
         )
+
+    def drive_body_frd(self, front: float, right: float, down: float, look_at_target: bool = False):
+        # ArduPilot rejects MAV_FRAME_BODY_FRD (holds position on unsupported
+        # frames); MAV_FRAME_BODY_OFFSET_NED is its supported predecessor with
+        # identical semantics: x/y/z = front/right/down rotated by the
+        # vehicle's heading, relative to its current position.
+        self.tx.set_position_target_local_ned_send(
+            0,  # timestamp
+            self.target_system,  # target system_id
+            self.target_component,  # target component_id
+            mavutil.mavlink.MAV_FRAME_BODY_OFFSET_NED,  # coordinate frame
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
+            mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
+            (mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE if look_at_target else 0),
+            float(front),  # front offset to vehicle position and heading (m)
+            float(right),  # right offset to vehicle position and heading (m)
+            float(down),  # down offset to vehicle position (m)
+            0,  # x velocity (m/s)
+            0,  # y velocity (m/s)
+            0,  # z velocity (m/s)
+            0,  # x acceleration (m/s^2)
+            0,  # y acceleration (m/s^2)
+            0,  # z acceleration (m/s^2)
+            0,  # yaw heading (radians)
+            0,  # yaw_rate (rad/s)
+        )
