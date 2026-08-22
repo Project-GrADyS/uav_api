@@ -36,7 +36,9 @@ def fail(message: str) -> None:
 def read(path: Path) -> str:
     # newline="" keeps any \r\n intact so files are written back byte-for-byte
     # outside the edited lines (pyproject.toml is CRLF in the repo).
-    return path.read_text(newline="")
+    # Path.read_text(newline=...) only exists on 3.13+, hence open().
+    with path.open("r", newline="") as f:
+        return f.read()
 
 
 def write(path: Path, text: str) -> None:
