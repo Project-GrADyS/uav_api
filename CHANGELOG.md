@@ -84,6 +84,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes from hanging forever to raising a timeout error.
 
 ### Fixed
+- `POST /mission/execute-script/` no longer reports success when the script
+  never started: a non-zero tmux exit now returns 500 with tmux's stderr in
+  the detail, a missing tmux binary returns 503 instead of an unhandled
+  traceback, and no "running" entry is recorded in either case. The paths
+  interpolated into the `bash -c` command line are shell-quoted, so a
+  scripts or log directory containing spaces survives intact. `upload-script`
+  is now a sync endpoint, keeping its blocking disk I/O off the event loop.
 - Removed the phantom `timeout` query parameter that `GET /command/land`
   advertised but never read, and the unused inline `Movement` model in the
   copter command router.
