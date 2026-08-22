@@ -64,3 +64,21 @@ class TestCommand:
         r = plane_client.get("/command/set_home")
         assert r.status_code == 200
         fake_plane.set_home.assert_called_once_with()
+
+
+class TestInputBounds:
+    @pytest.mark.parametrize("alt", [0, 1001])
+    def test_takeoff_altitude_out_of_range_is_422(self, plane_client, fake_plane, alt):
+        r = plane_client.get("/command/takeoff", params={"alt": alt})
+        assert r.status_code == 422
+        fake_plane.takeoff.assert_not_called()
+
+    @pytest.mark.parametrize("params", [
+        {"lat": 91, "long": 0},
+        {"lat": 0, "long": 181},
+        {"lat": 0, "long": 0, "alt": -1},
+    ])
+    def test_land_at_out_of_range_is_422(self, plane_client, fake_plane, params):
+        r = plane_client.get("/command/land_at", params=params)
+        assert r.status_code == 422
+        fake_plane.land_at.assert_not_called()

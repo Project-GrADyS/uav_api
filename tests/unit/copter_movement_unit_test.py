@@ -100,3 +100,21 @@ class TestYaw:
         assert r.status_code == 200
         assert_envelope(r.json(), "15.0 deg/s")
         fake_copter.set_yaw_rate.assert_called_once_with(15.0)
+
+
+class TestInputBounds:
+    @pytest.mark.parametrize("heading", [-1, 361])
+    def test_heading_out_of_range_is_422(self, copter_client, fake_copter, heading):
+        r = copter_client.get("/movement/set_heading", params={"heading": heading})
+        assert r.status_code == 422
+        fake_copter.set_heading.assert_not_called()
+
+    @pytest.mark.parametrize("body", [
+        {"lat": 91, "long": 0, "alt": 10},
+        {"lat": 0, "long": -181, "alt": 10},
+        {"lat": 0, "long": 0, "alt": -1},
+    ])
+    def test_gps_position_out_of_range_is_422(self, copter_client, fake_copter, body):
+        r = copter_client.post("/movement/go_to_gps/", json=body)
+        assert r.status_code == 422
+        fake_copter.go_to_gps.assert_not_called()

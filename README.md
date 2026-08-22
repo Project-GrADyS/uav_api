@@ -170,7 +170,7 @@ notes, why the unit is written the way it is, and troubleshooting.
 This starts both ArduCopter SITL (in a new `xterm` window) and the API — see [Running headless](#running-headless) for the no-window variant:
 
 ```bash
-uav-api --simulated true --speedup 1 --port 8000 --sysid 1
+uav-api --simulated --speedup 1 --port 8000 --sysid 1
 ```
 
 SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`). The `--speedup` factor controls simulation speed (e.g. `5` = 5× real time). The `--location` argument sets the SITL home position (default `AbraDF`).
@@ -180,12 +180,12 @@ SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`).
 `--headless` runs the same simulation without opening any window, so it works on a machine with no X server — CI, a remote box, or over SSH:
 
 ```bash
-uav-api --simulated true --headless --speedup 1 --port 8000 --sysid 1
+uav-api --simulated --headless --speedup 1 --port 8000 --sysid 1
 ```
 
 This does three things, and all three are required:
 
-1. uav_api stops wrapping `sim_vehicle.py` in `xterm`.
+1. uav_api stops wrapping `sim_vehicle.py` in the terminal command (`xterm -e` by default, configurable with `--terminal`).
 2. It removes `DISPLAY` (along with `SITL_RITW_TERMINAL`, `TMUX`, `STY` and `ZELLIJ`) from the environment it hands to SITL. ArduPilot's `run_in_terminal_window.sh` launches the vehicle binary in whatever terminal those variables point at, and only runs it in the background when none are set — without the scrub you would still get a window on a desktop.
 3. It passes `--mavproxy-args=--daemon`, so MAVProxy starts without an interactive shell. This one is not cosmetic: MAVProxy treats EOF on stdin as a request to quit, and `sim_vehicle.py` exits when MAVProxy does, so a headless SITL without it dies within milliseconds of starting.
 
@@ -195,7 +195,7 @@ Since there is no terminal to read, output is written to files instead:
 
 | Output | Location |
 |--------|----------|
-| `sim_vehicle.py` and MAVProxy | `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` |
+| `sim_vehicle.py` and MAVProxy | `~/.uav_api/logs/ardupilot_logs/sitl_<sysid>.log` |
 | The vehicle binary (`ArduCopter`/`ArduPlane`) | `/tmp/<vehicle>.log`, chosen by ArduPilot |
 
 > The vehicle binary's path is ArduPilot's choice, not uav_api's, and it does not include the sysid — several headless instances on one host will write over each other there. The per-sysid `sitl_<sysid>.log` is unaffected.
@@ -211,10 +211,10 @@ Simulated mode launches SITL through ArduPilot's `sim_vehicle.py` script. How th
 
 ```bash
 # Default — sim_vehicle.py comes from PATH
-uav-api --simulated true --port 8000 --sysid 1
+uav-api --simulated --port 8000 --sysid 1
 
 # Explicit — use this ArduPilot repository, regardless of PATH
-uav-api --simulated true --ardupilot_path ~/ardupilot --port 8000 --sysid 1
+uav-api --simulated --ardupilot_path ~/ardupilot --port 8000 --sysid 1
 ```
 
 Use `--ardupilot_path` when ArduPilot is not on your `PATH`, or when you keep several ArduPilot checkouts and want to select one per API instance.
@@ -255,7 +255,7 @@ The API supports two ArduPilot vehicles, selected at startup with `--vehicle`:
 **Run as plane in simulation:**
 
 ```bash
-uav-api --vehicle plane --simulated true --speedup 1 --port 8000 --sysid 1
+uav-api --vehicle plane --simulated --speedup 1 --port 8000 --sysid 1
 ```
 
 This spawns ArduPlane SITL (instead of ArduCopter) and registers only the plane routers. Consumer URLs are unchanged — `/command/arm`, `/movement/go_to_gps`, `/telemetry/gps` work the same way; the endpoint *set* is smaller. Plane mode exposes:
@@ -272,11 +272,11 @@ The CLI token used in `--log_console` and `--debug` is the vehicle-agnostic `VEH
 
 ```bash
 # Copter (default)
-uav-api --simulated true --log_console VEHICLE ...
+uav-api --simulated --log_console VEHICLE ...
 # console: [COPTER-1] INFO - Sending COMMAND_LONG ...
 
 # Plane
-uav-api --vehicle plane --simulated true --log_console VEHICLE ...
+uav-api --vehicle plane --simulated --log_console VEHICLE ...
 # console: [PLANE-1] INFO - Sending COMMAND_LONG ...
 ```
 
@@ -314,6 +314,8 @@ Only write the keys you actually want to change; omitting a key gives you its de
 
 Boolean keys (`simulated`, `udp`, `headless`) accept `true`/`false`, `yes`/`no`, `on`/`off` or `1`/`0`, in any case. Anything else is rejected at startup rather than guessed at.
 
+The config layer fails loudly instead of guessing: a `--config` path that doesn't exist or can't be read aborts startup (it used to silently fall back to defaults), a malformed INI file aborts with the parser's error, and a section other than `[mode]`, `[api]`, `[logs]`, `[simulated]` or `[udp]` aborts naming the offender. A key that matches no argument is ignored with a warning on the `SYSTEM` logger.
+
 Example config files for single and multi-UAV simulated setups are available at `flight_examples/uavs/uav_1.ini` and `uav_2.ini`. For a real drone, start from [`packaging/uav-api.ini.example`](packaging/uav-api.ini.example).
 
 > `ardupilot_path` is optional here too — drop the key to resolve `sim_vehicle.py` from `PATH`.
@@ -329,7 +331,7 @@ from uav_api.run_api import spawn_with_args
 
 # Start a simulated UAV API on port 8001
 process = spawn_with_args([
-    "--simulated", "true",
+    "--simulated",
     "--speedup", "5",
     "--port", "8001",
     "--sysid", "1",
@@ -359,6 +361,8 @@ Open the interactive Swagger UI in your browser:
 http://localhost:<port>/docs
 ```
 
+> As of 0.3.0 all routes declare response models — a consistent `device`/`id`/`result` envelope — and flight-critical inputs (speeds, altitudes, GPS coordinates, servo PWM) are bounds-checked, returning 422 before anything reaches MAVLink. See [`docs/api-specification.md`](docs/api-specification.md) for the full contract.
+
 <img src="https://github.com/user-attachments/assets/6ef0d0b1-4dd7-4049-b16e-f3b509ab1b94" />
 
 Scroll to the **telemetry** router and call `GET /telemetry/general`:
@@ -380,41 +384,43 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--config` | None | Path to INI config file (`[api]`, `[simulated]`, `[logs]` sections) |
+| `--root_dir` | `~/.uav_api` | Root directory for all runtime artifacts: `logs/uav_logs`, `logs/ardupilot_logs`, `logs/script_logs`, `scripts/`, `certs/`. Per-path arguments below override their derived defaults. |
 | `--vehicle` | `copter` | `copter` (default) or `plane`. Selects which routers register and which ArduPilot SITL spawns. See [Vehicle Types](#vehicle-types). |
 | `--port` | 8000 | HTTP port the API listens on |
 | `--sysid` | 10 | MAVLink system ID; must match the drone's `SYSID_THISMAV` parameter |
 | `--uav_connection` | `127.0.0.1:17171` | MAVLink address — `host:port` for UDP, or serial device path for USB |
 | `--gradys_gs` | None | `host:port` of Gradys Ground Station — enables periodic GPS location push |
-| `--scripts_path` | `~/uav_scripts` | Directory where uploaded scripts are saved and executed from (copter mode). Created at startup if missing. |
+| `--scripts_path` | `~/.uav_api/scripts` | Directory where uploaded scripts are saved and executed from (copter mode). Created at startup if missing. |
 | `--python_path` | `python3` | Python binary used to run uploaded `.py` scripts |
 
 ## Connection (real drone)
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--connection_type` | `udpin` | `udpin` — API listens; `udpout` — API connects out; `usb` — serial |
+| `--connection_type` | `udpin` | One of `udpin`, `udpout`, `usb`, `tcp`. `udpin` — API listens; `udpout` — API connects out; `tcp` — TCP client; `usb` — `uav_connection` is used raw as a serial device path (e.g. `/dev/ttyACM0`) |
 
 ## Simulation only
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--simulated` | `false` | Set to `true` to spawn ArduPilot SITL alongside the API (binary is `ArduCopter` or `ArduPlane` depending on `--vehicle`) |
+| `--simulated` | off | Bare flag; presence spawns ArduPilot SITL alongside the API (binary is `ArduCopter` or `ArduPlane` depending on `--vehicle`). In config files use `simulated = true/false` |
 | `--ardupilot_path` | `None` | Path to local ArduPilot repository. When omitted, `sim_vehicle.py` is resolved from the `PATH` environment variable; when set, SITL is launched from `<ardupilot_path>/Tools/autotest/sim_vehicle.py`. See [Locating ArduPilot](#locating-ardupilot---ardupilot_path). |
-| `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`) |
+| `--location` | `AbraDF` | Named home position for SITL (defined in `~/.config/ardupilot/locations.txt`). The custom AbraDF entries are merged into that file at startup, preserving existing entries; an unknown name aborts startup when ArduPilot's built-in list is checkable (`--ardupilot_path` set), and warns otherwise. |
 | `--speedup` | 1 | SITL simulation time multiplier |
 | `--gs_connection` | `[]` | Extra `host:port` addresses SITL streams telemetry to (e.g. Mission Planner) |
-| `--headless` | `false` | Run SITL without opening any terminal window; requires no X server. Output goes to `~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log`. See [Running headless](#running-headless). |
+| `--terminal` | `xterm -e` | Terminal command SITL is wrapped in, following ArduPilot's `SITL_RITW_TERMINAL` convention (e.g. `gnome-terminal --`). Ignored with `--headless`. |
+| `--headless` | `false` | Run SITL without opening any terminal window; requires no X server. Output goes to `~/.uav_api/logs/ardupilot_logs/sitl_<sysid>.log`. See [Running headless](#running-headless). |
 
 ## Logging
 
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--log_console` | `[]` | Components to print logs to console: `VEHICLE` `UVICORN` `GRADYS_GS` `SCRIPT`. `VEHICLE` is vehicle-agnostic — see [Logging in different vehicles](#logging-in-different-vehicles) for the prefix actually printed. |
-| `--log_path` | `~/uav_api_logs/uav_logs/uav_<sysid>.log` | File path to write all component logs combined. Its parent directory is created at startup. |
+| `--log_path` | `~/.uav_api/logs/uav_logs/uav_<sysid>.log` | File path to write all component logs combined. Its parent directory is created at startup. |
 | `--debug` | `[]` | Same component names as `--log_console` but at DEBUG verbosity |
-| `--script_logs` | `~/uav_api_logs/script_logs` | Directory where script stdout/stderr are saved as timestamped `.log` files. Created at startup if missing. |
+| `--script_logs` | `~/.uav_api/logs/script_logs` | Directory where script stdout/stderr are saved as timestamped `.log` files. Created at startup if missing. |
 
-> The API creates the directories it needs at startup — `scripts_path`, `script_logs`, and the parent of `log_path` — whether the path came from the default or from a config file, expanding `~` along the way. Nothing has to pre-create them for it.
+> The API creates the directories it needs at startup — `scripts_path`, `script_logs`, and the parent of `log_path` — whether the path came from `root_dir` derivation or from a config file, expanding `~` along the way (`mkdir -p` semantics, so a pre-provisioned `root_dir` such as a systemd `StateDirectory=` is fine). Nothing has to pre-create them for it. To relocate everything at once, set one key: `root_dir = /var/lib/uav_api`.
 
 ## UDP/QUIC mode
 
@@ -424,12 +430,12 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | `--certfile` | None | Path to TLS certificate PEM file. Auto-generated self-signed cert if omitted. |
 | `--keyfile` | None | Path to TLS private key PEM file. Auto-generated if omitted. |
 
-QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-signed certs are auto-generated in `~/uav_api_certs/`.
+QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-signed certs are auto-generated in `~/.uav_api/certs/`.
 
 **Starting the API in UDP/QUIC mode:**
 
 ```bash
-uav-api --udp --simulated true --port 8000 --sysid 1
+uav-api --udp --simulated --port 8000 --sysid 1
 ```
 
 **Consuming the API over HTTP/3 (QUIC):**
@@ -474,7 +480,7 @@ Each POST to `http://<gradys_gs>/update-info/` includes: latitude, longitude, al
 When running in simulated mode, use `--gs_connection` to stream MAVLink telemetry to Mission Planner (or any GCS software):
 
 ```bash
-uav-api --simulated true --sysid 1 --gs_connection [192.168.1.5:14550]
+uav-api --simulated --sysid 1 --gs_connection [192.168.1.5:14550]
 ```
 
 Connect Mission Planner to the specified UDP address to see live position, attitude, and flight data.
@@ -496,10 +502,12 @@ uav-api --log_path ~/uav_api.log ...
 uav-api --debug VEHICLE ...
 
 # Save script stdout/stderr to a directory
-uav-api --script_logs ~/uav_api_logs/script_logs ...
+uav-api --script_logs ~/.uav_api/logs/script_logs ...
 ```
 
 Available log components: `VEHICLE`, `UVICORN`, `GRADYS_GS`, `SCRIPT`. The `VEHICLE` token routes to the active vehicle's logger; the actual line prefix you see is `[COPTER-<sysid>]` or `[PLANE-<sysid>]` depending on `--vehicle` — see [Logging in different vehicles](#logging-in-different-vehicles).
+
+The `UVICORN` token controls the ASGI server's own loggers on both paths: uvicorn on the default TCP server and hypercorn under `--udp`. Server console verbosity follows `--debug UVICORN`; without it the server logs at INFO.
 
 ## Mission Script Management
 
@@ -509,7 +517,7 @@ The API can host and execute Python or shell scripts on the UAV's companion comp
 ```
 POST /mission/upload-script   (multipart form, field: file)
 ```
-Accepts `.py` and `.sh` files. Saved to `--scripts_path` (default `~/uav_scripts`).
+Accepts `.py` and `.sh` files. Saved to `--scripts_path` (default `~/.uav_api/scripts`).
 
 **List uploaded scripts:**
 ```
@@ -660,7 +668,7 @@ Launched by `uav_api/run_api.py`. All processes below run within its lifetime.
 **MAVLink receiver thread**
 A dedicated daemon thread started by `Vehicle.connect()` — the only line of execution that reads the MAVLink connection. It keeps the latest-by-type message cache fresh, dispatches messages to subscription queues that request handlers wait on, and sends the GCS heartbeat. Stopped by `vehicle.close()` on shutdown, which also unblocks any in-flight waiters.
 
-### Conditional: simulated mode (`--simulated true`)
+### Conditional: simulated mode (`--simulated`)
 
 **ArduPilot SITL process**
 Spawned as `xterm -e sim_vehicle.py -v {ArduCopter|ArduPlane} ...` subprocess (the vehicle binary is chosen by `--vehicle`). Tagged with a unique environment variable (`UAV_SITL_TAG=SITL_ID_<sysid>`). On shutdown, all system processes carrying that tag are killed via `psutil`, ensuring clean teardown even if xterm spawned child processes.
@@ -1467,7 +1475,7 @@ Every module directly under `tests/` spawns a real SITL-backed API server
 - `tmux` (used by the mission router)
 
 Modules must run **sequentially** — every SITL instance shares the same
-working directory (`~/uav_api_logs/ardupilot_logs`) — so run them one at a
+working directory (`~/.uav_api/logs/ardupilot_logs`) — so run them one at a
 time, never with `pytest-xdist`:
 
 ```bash
@@ -1497,8 +1505,8 @@ Each module owns a fixed port/sysid so state cannot leak between modules:
 | `plane_telemetry_test` | 8009 | 9 | plane |
 
 SITL runs headless; if a module fails, SITL output is in
-`~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log` and the API log is in
-`~/uav_api_logs/uav_logs/uav_<sysid>.log`.
+`~/.uav_api/logs/ardupilot_logs/sitl_<sysid>.log` and the API log is in
+`~/.uav_api/logs/uav_logs/uav_<sysid>.log`.
 
 ## Lint
 

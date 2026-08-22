@@ -5,7 +5,7 @@ Each test module gets its OWN SITL-backed API server (module-scoped fixture,
 built with make_api_fixture) on a unique port/sysid, so state can't leak
 between modules and destructive tests (land, RTL, set_home) can't poison
 other files. Modules must run sequentially: every SITL instance shares the
-same working directory (~/uav_api_logs/ardupilot_logs).
+same working directory (~/.uav_api/logs/ardupilot_logs).
 
 Port/sysid allocation:
     copter_command_test    8001 / 1
@@ -28,8 +28,8 @@ Requirements:
     - pytest, requests, psutil
 
 SITL runs with --headless, so no X server or xterm is needed. SITL output
-goes to ~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log if you need to see
-why it failed; the API log is ~/uav_api_logs/uav_logs/uav_<sysid>.log.
+goes to ~/.uav_api/logs/ardupilot_logs/sitl_<sysid>.log if you need to see
+why it failed; the API log is ~/.uav_api/logs/uav_logs/uav_<sysid>.log.
 """
 
 import os
@@ -41,7 +41,7 @@ import requests
 from uav_api.run_api import spawn_with_args
 
 SPEEDUP = 5
-ARDUPILOT_LOGS = os.path.expanduser("~/uav_api_logs/ardupilot_logs")
+ARDUPILOT_LOGS = os.path.expanduser("~/.uav_api/logs/ardupilot_logs")
 
 
 # ── HTTP client ───────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ def wait_for_api(client, proc, timeout=90):
         if not proc.is_alive():
             raise RuntimeError(
                 "API server process died during startup — see "
-                "~/uav_api_logs/uav_logs and ~/uav_api_logs/ardupilot_logs"
+                "~/.uav_api/logs/uav_logs and ~/.uav_api/logs/ardupilot_logs"
             )
         try:
             r = client.get("/telemetry/general")
@@ -138,7 +138,7 @@ def start_api(port, sysid, flying=False, vehicle="copter"):
         os.remove(eeprom)
 
     proc = spawn_with_args([
-        "--simulated", "true",
+        "--simulated",
         "--headless",
         "--speedup", str(SPEEDUP),
         "--port", str(port),

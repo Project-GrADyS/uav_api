@@ -21,6 +21,8 @@ port = 8000
 ; Where MAVLink arrives. With connection_type = udpin the API listens on this
 ; address and something else -- typically mavlink-router or MAVProxy on the
 ; companion computer -- forwards the flight controller's stream to it.
+; Valid connection_type values: udpin, udpout, tcp, usb. With usb,
+; uav_connection is used raw as a serial device path (e.g. /dev/ttyACM0).
 uav_connection = 127.0.0.1:17171
 connection_type = udpin
 
@@ -31,10 +33,9 @@ sysid = 1
 ; Optional. When set, the API pushes its GPS location here once per second.
 gradys_gs = 10.0.2.5:8000
 
-; Target directory for /mission/upload-script and source for
-; /mission/execute-script. Must exist and be writable by the service user.
-scripts_path = /home/pi/uav_scripts
-
-[logs]
-log_path = /home/pi/uav_api_logs/uav_logs/uav_1.log
-script_logs = /home/pi/uav_api_logs/script_logs
+; Root directory for all runtime artifacts. The API creates logs/uav_logs,
+; logs/script_logs, scripts/ and certs/ under it at startup (idempotent, safe
+; when pre-provisioned e.g. by systemd StateDirectory=). Must be writable by
+; the service user. The per-path keys scripts_path, log_path and script_logs
+; still override their derived defaults individually if needed.
+root_dir = /var/lib/uav_api

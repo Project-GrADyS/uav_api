@@ -107,3 +107,25 @@ class TestSetters:
     def test_missing_required_param_is_422(self, copter_client):
         r = copter_client.get("/command/set_air_speed")
         assert r.status_code == 422
+
+
+class TestInputBounds:
+    """Out-of-range flight-critical inputs are rejected before reaching MAVLink."""
+
+    @pytest.mark.parametrize("alt", [0, -5, 501])
+    def test_takeoff_altitude_out_of_range_is_422(self, copter_client, fake_copter, alt):
+        r = copter_client.get("/command/takeoff", params={"alt": alt})
+        assert r.status_code == 422
+        fake_copter.user_takeoff.assert_not_called()
+
+    @pytest.mark.parametrize("endpoint", [
+        "set_air_speed", "set_ground_speed", "set_climb_speed", "set_descent_speed",
+    ])
+    @pytest.mark.parametrize("new_v", [-1, 51])
+    def test_speed_out_of_range_is_422(self, copter_client, endpoint, new_v):
+        r = copter_client.get(f"/command/{endpoint}", params={"new_v": new_v})
+        assert r.status_code == 422
+
+    def test_sim_speedup_must_be_positive(self, copter_client):
+        r = copter_client.get("/command/set_sim_speedup", params={"sim_factor": 0})
+        assert r.status_code == 422

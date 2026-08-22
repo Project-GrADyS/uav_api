@@ -4,7 +4,7 @@ Integration tests for the mission router endpoints.
 Own SITL instance (port 8002, sysid 2), grounded — these tests only need the
 API. Order: upload → list → execute → clear.
 
-Uploaded scripts live on disk (~/uav_scripts) and persist across API
+Uploaded scripts live on disk (~/.uav_api/scripts) and persist across API
 restarts, so leftovers are wiped before the module runs.
 """
 
@@ -20,7 +20,7 @@ pytestmark = [pytest.mark.sitl, pytest.mark.copter]
 
 api = make_api_fixture(port=8002, sysid=2, flying=False)
 
-SCRIPTS_PATH = os.path.expanduser("~/uav_scripts")
+SCRIPTS_PATH = os.path.expanduser("~/.uav_api/scripts")
 
 
 @pytest.fixture(scope="module", autouse=True)

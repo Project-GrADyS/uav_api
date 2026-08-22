@@ -2,7 +2,12 @@
 import configparser
 import json
 import argparse
+import logging
 import os
+
+# Section names accepted in config files, mirroring the five argument groups
+# below (parse_mode, parse_api, parse_logs, parse_simulated, parse_udp).
+KNOWN_SECTIONS = {"mode", "api", "logs", "simulated", "udp"}
 
 def namespace_to_str(namespace: argparse.Namespace) -> str:
     """Convert argparse.Namespace to a JSON string."""
@@ -22,11 +27,6 @@ def read_args_from_env() -> argparse.Namespace:
     if args_str:
         return str_to_namespace(args_str)
     return None
-
-def parse_config_file(file_path):
-    config = configparser.ConfigParser()
-    config.read(file_path)
-    print(config.sections())
 
 _TRUE_VALUES = {"true", "yes", "on", "1"}
 _FALSE_VALUES = {"false", "no", "off", "0"}
@@ -59,9 +59,22 @@ def parse_args(raw_args=None):
     args = parser.parse_args(raw_args)
 
     if args.config:
-        #parse_config_file(args.config)
         config = configparser.ConfigParser()
-        config.read(args.config)
+        try:
+            read_files = config.read(args.config)
+        except configparser.Error as e:
+            parser.error(f"Malformed config file {args.config}: {e}")
+        # configparser treats a missing or unreadable path as "nothing to
+        # read", which on a real drone presents as "API up, no MAVLink".
+        if not read_files:
+            parser.error(f"Config file not found or unreadable: {args.config}")
+
+        unknown_sections = sorted(set(config.sections()) - KNOWN_SECTIONS)
+        if unknown_sections:
+            parser.error(
+                f"Unknown section(s) {unknown_sections} in {args.config}; "
+                f"known sections: {sorted(KNOWN_SECTIONS)}"
+            )
 
         if "simulated" in config.sections():
             setattr(args, "simulated", True)
@@ -83,7 +96,10 @@ def parse_args(raw_args=None):
                         value = [v.strip() for v in value.strip("[]").split(",") if v.strip()]
                     setattr(args, key, value)
                 else:
-                    print(f"Warning: {key} not found in args")
+                    logging.getLogger("SYSTEM").warning(
+                        f"Config key '{key}' in [{section}] of {args.config} "
+                        "does not match any argument; ignored"
+                    )
     return args
     
 # MODE PARSER
@@ -92,9 +108,9 @@ def parse_mode(mode_parser):
     mode_parser.add_argument(
         '--simulated',
         dest='simulated',
-        type=bool,
+        action='store_true',
         default=False,
-        help="Wheter to simulate copter using Ardupilot's SITL or not"
+        help="Simulate the vehicle using Ardupilot's SITL (bare flag; presence enables simulation)"
     )
 
     mode_parser.add_argument(
@@ -102,6 +118,14 @@ def parse_mode(mode_parser):
         dest='config',
         default=None,
         help="Configuration file for UAV execution"
+    )
+
+    mode_parser.add_argument(
+        '--root_dir',
+        dest='root_dir',
+        default="~/.uav_api",
+        help="Root directory for all runtime artifacts (logs/, scripts/, certs/). "
+             "Individual path arguments override their derived defaults."
     )
 
     mode_parser.add_argument(
@@ -134,7 +158,10 @@ def parse_api(api_parser):
         '--connection_type',
         dest='connection_type',
         default='udpin',
-        help="Connection type (client or server) for copter. Either udpin or udpout"
+        choices=['udpin', 'udpout', 'usb', 'tcp'],
+        help="Connection scheme for the vehicle link. udpin/udpout/tcp prefix "
+             "uav_connection as '<type>:<address>'; usb passes uav_connection "
+             "through raw as a serial device path (e.g. /dev/ttyACM0)"
     )
 
     api_parser.add_argument(
@@ -157,8 +184,8 @@ def parse_api(api_parser):
         '--scripts_path',
         dest='scripts_path',
         type=str,
-        default="~/uav_scripts",
-        help='Path for uav_scripts directory'
+        default=None,
+        help='Directory for uploaded mission scripts (default: <root_dir>/scripts)'
     )
 
     api_parser.add_argument(
@@ -204,12 +231,21 @@ def parse_simulated(simulated_parser):
     )
 
     simulated_parser.add_argument(
+        '--terminal',
+        dest='terminal',
+        default='xterm -e',
+        help="Terminal command used to wrap SITL, following ArduPilot's "
+             "SITL_RITW_TERMINAL convention (e.g. 'xterm -e', "
+             "'gnome-terminal --'). Ignored with --headless."
+    )
+
+    simulated_parser.add_argument(
         '--headless',
         dest='headless',
         action='store_true',
         default=False,
         help="Run SITL without opening any terminal window, for hosts with no X server. "
-             "SITL output goes to ~/uav_api_logs/ardupilot_logs/sitl_<sysid>.log"
+             "SITL output goes to <root_dir>/logs/ardupilot_logs/sitl_<sysid>.log"
     )
 
 def parse_logs(logs_parser):
@@ -234,7 +270,7 @@ def parse_logs(logs_parser):
         "--log_path",
         dest="log_path",
         default=None,
-        help="Saves log files to the provided path. This log file will receive the logs from all loggers of that UAV. Which include: COPTER, GRADYS_GS and API."
+        help="Saves log files to the provided path (default: <root_dir>/logs/uav_logs/uav_<sysid>.log). This log file will receive the logs from all loggers of that UAV. Which include: COPTER, GRADYS_GS and API."
     )
 
     logs_parser.add_argument(
@@ -250,7 +286,7 @@ def parse_logs(logs_parser):
         "--script_logs",
         dest="script_logs",
         default=None,
-        help="Saves script executed by mission route out and err files to the provided path"
+        help="Saves script executed by mission route out and err files to the provided path (default: <root_dir>/logs/script_logs)"
     )
 
 def parse_udp(udp_parser):
@@ -267,12 +303,12 @@ def parse_udp(udp_parser):
         '--certfile',
         dest='certfile',
         default=None,
-        help='Path to TLS certificate PEM file (for --udp mode). Auto-generated if omitted.'
+        help='Path to TLS certificate PEM file (for --udp mode). Auto-generated under <root_dir>/certs if omitted.'
     )
 
     udp_parser.add_argument(
         '--keyfile',
         dest='keyfile',
         default=None,
-        help='Path to TLS private key PEM file (for --udp mode). Auto-generated if omitted.'
+        help='Path to TLS private key PEM file (for --udp mode). Auto-generated under <root_dir>/certs if omitted.'
     )

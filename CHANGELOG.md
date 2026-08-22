@@ -7,7 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Response models on all 55 routes** (`uav_api/classes/responses.py`): the
+  envelope is now machine-readable in the OpenAPI schema. Canonical shape:
+  `device`/`id`/`result` on every JSON response. Telemetry `result` is
+  normalized to lowercase `"success"` (previously a mix of `"Success"` and
+  `"success"`); mission responses gain `result` while keeping their numeric
+  `type` codes (42–52), now **deprecated** and scheduled for removal in a
+  future release. `/peripherical/take_photo` (a JPEG FileResponse) is
+  exempt.
+- **Input validation on flight-critical parameters**, returning 422 before
+  anything reaches MAVLink: GPS bodies (`lat` ±90, `long` ±180, `alt`
+  0–10000 m), speed endpoints (0–50 m/s), copter takeoff (1–500 m), plane
+  takeoff (up to 1000 m), `land_at` coordinates, heading (0–360), servo
+  `channel` (1–16) and `pwm` (800–2200).
+- `--terminal`: the terminal command SITL is wrapped in (default `xterm -e`),
+  following ArduPilot's `SITL_RITW_TERMINAL` convention — e.g.
+  `--terminal 'gnome-terminal --'`. Ignored with `--headless`.
+- The requested `--location` is validated at startup: unknown names abort
+  with a clear message when ArduPilot's built-in locations.txt is checkable
+  (`--ardupilot_path` set), and warn otherwise.
+- `--root_dir` (also settable in config files): a single root for all runtime
+  artifacts, defaulting to `~/.uav_api/` with the layout `logs/{uav_logs,
+  ardupilot_logs,script_logs}`, `scripts/` and `certs/`. Directories are
+  created with mkdir-p semantics, so a pre-provisioned root (e.g. systemd
+  `StateDirectory=`) works. `--log_path`, `--scripts_path`, `--script_logs`
+  and `--certfile`/`--keyfile` remain as per-path overrides.
+
 ### Changed
+- **BREAKING (default installs):** runtime artifacts move from
+  `~/uav_api_logs/`, `~/uav_scripts/` and `~/uav_api_certs/` (the latter was
+  hardcoded and could not be moved at all) to the single `~/.uav_api/` root.
+  Deployments that set explicit paths are unaffected.
+- The two near-duplicate logging-config builders in `uav_api/log.py` were
+  collapsed into one builder parameterized by the server's logger names
+  (uvicorn vs hypercorn), so the wiring can no longer drift apart.
+- Config-file handling fails loudly instead of guessing: a missing or
+  unreadable `--config` path aborts startup (it used to silently run on
+  defaults — on a real drone that presented as "API up, no MAVLink"),
+  malformed INI files abort with the parser error, and unknown section names
+  abort naming the known set (`mode`, `api`, `logs`, `simulated`, `udp`).
+  Unknown keys now warn through the `SYSTEM` logger instead of `print`.
+- `--connection_type` is constrained to `udpin`/`udpout`/`usb`/`tcp`, and its
+  help text documents that `usb` passes `uav_connection` through raw as a
+  serial device path.
+- **BREAKING (CLI):** `--simulated` is now a bare flag (`action='store_true'`),
+  consistent with `--headless` and `--udp`. `--simulated true` is rejected by
+  argparse; the old form was broken anyway — `type=bool` made `--simulated
+  false` silently enable simulation. Config files are unaffected:
+  `simulated = true/false` (and `yes/no`, `on/off`, `1/0`) keep working.
 - **BREAKING (plane):** `POST /movement/land_at` was replaced by
   `GET /command/land_at?lat&long&alt&vtol`. Instead of the composite
   DO_REPOSITION → LAND (which needed a pre-arranged approach), it uploads a
@@ -36,6 +84,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes from hanging forever to raising a timeout error.
 
 ### Fixed
+- Removed the phantom `timeout` query parameter that `GET /command/land`
+  advertised but never read, and the unused inline `Movement` model in the
+  copter command router.
+- The SITL launch command is now built as an argv list end-to-end instead of
+  an f-string later split on spaces: no more empty argv entries from the
+  double space after `--out`, and paths containing spaces
+  (`--ardupilot_path`, the log directory) survive intact. The bare `except:`
+  around SITL startup is narrowed to `except Exception` and now logs the
+  actual exception.
+- Custom SITL home locations are merged into an existing
+  `~/.config/ardupilot/locations.txt` (preserving user entries) instead of
+  being written only when the file did not exist — on machines with a
+  pre-existing file the AbraDF entries were never added and SITL failed on
+  the default `--location` with no hint why. The file is now only touched in
+  simulated mode.
+- On the default (TCP/uvicorn) server, `--log_console UVICORN`, `--debug
+  UVICORN` and access logs in `--log_path` were silent no-ops: `uvicorn.run`
+  was called without `log_config=None`, so uvicorn's default logging config
+  overwrote the `uvicorn.*` loggers configured at startup, and
+  `log_level="debug"` was hardcoded. The server now keeps the pre-configured
+  loggers and derives its level from `--debug UVICORN`.
 - Concurrent request handlers, the drain loop, and the Gradys GS task all read
   the same MAVLink connection at once, silently stealing each other's messages
   (pymavlink's type-filtered reads discard every non-matching message).

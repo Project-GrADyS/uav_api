@@ -32,20 +32,22 @@ def create_app(args) -> FastAPI:
         title="Uav_API",
         summary="API designed to simplify vehicle control for Ardupilot UAVs.",
         description=description,
-        version="0.2.2",
+        version="0.3.0",
         openapi_tags=metadata,
         lifespan=lifespan
     )
     if args.vehicle == "plane":
-        app.include_router(plane_command.router)
-        app.include_router(plane_movement.router)
-        app.include_router(plane_telemetry.router)
+        routers = [plane_command.router, plane_movement.router, plane_telemetry.router]
     else:
-        app.include_router(copter_command.router)
-        app.include_router(copter_telemetry.router)
-        app.include_router(copter_movement.router)
-        app.include_router(mission.router)
-        app.include_router(peripherical.router)
+        routers = [
+            copter_command.router,
+            copter_telemetry.router,
+            copter_movement.router,
+            mission.router,
+            peripherical.router,
+        ]
+    for router in routers:
+        app.include_router(router)
     return app
 
 # uvicorn/hypercorn import this module as "uav_api.api_app:app" after run_api

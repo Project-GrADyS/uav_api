@@ -90,3 +90,16 @@ class TestServoOutput:
         r = copter_client.post("/peripherical/servo_output", json={"channel": 5, "pwm": 1500})
         assert r.status_code == 500
         assert "SERVO_OUTPUT FAIL" in r.json()["detail"]
+
+
+class TestServoBounds:
+    @pytest.mark.parametrize("body", [
+        {"channel": 0, "pwm": 1500},
+        {"channel": 17, "pwm": 1500},
+        {"channel": 5, "pwm": 799},
+        {"channel": 5, "pwm": 2201},
+    ])
+    def test_servo_out_of_range_is_422(self, copter_client, fake_copter, body):
+        r = copter_client.post("/peripherical/servo_output", json=body)
+        assert r.status_code == 422
+        fake_copter.set_servo.assert_not_called()

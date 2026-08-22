@@ -3,12 +3,14 @@ import asyncio
 import logging
 import aiohttp
 import psutil
+import shlex
 import subprocess
 
 from datetime import datetime
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from uav_api.routers.dependencies import get_args, init_copter, init_plane, get_scripts_table
+from uav_api.setup import ardupilot_logs_dir
 from uav_api.gradys_gs import send_location_to_gradys_gs
 from uav_api.log import set_log_config
 
@@ -80,6 +82,39 @@ def kill_tmux_sessions(prefix):
     except FileNotFoundError:
         logger.error("Error: 'tmux' command not found. Ensure tmux is installed and in your PATH.")
 
+def build_sitl_command(args, script_path, ardupilot_logs):
+    """Build the sim_vehicle.py argv as a list.
+
+    Argv is a list end-to-end -- never a string split on spaces -- so paths
+    containing spaces survive and no empty entries are injected.
+    """
+    ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"
+    sitl_command = [
+        script_path,
+        "-v", ardupilot_vehicle,
+        "-I", str(args.sysid),
+        "--sysid", str(args.sysid),
+        "-N",
+        "-L", args.location,
+        "--speedup", str(args.speedup),
+        "--out", args.uav_connection,
+    ]
+    for address in args.gs_connection:
+        sitl_command += ["--out", address]
+    sitl_command.append(f"--use-dir={ardupilot_logs}")
+
+    if args.headless:
+        # MAVProxy quits the moment its stdin reports EOF (mavproxy.py
+        # input_loop), and sim_vehicle.py blocks on MAVProxy and exits with it.
+        # With no terminal to type into there is nothing to lose by disabling
+        # the interactive shell, and everything to lose by leaving it on.
+        sitl_command.append("--mavproxy-args=--daemon")
+    else:
+        # shlex.split handles multi-token terminals like "gnome-terminal --".
+        sitl_command = shlex.split(args.terminal) + sitl_command
+
+    return sitl_command
+
 def start_sitl(sitl_tag, args):
     try:
         env = os.environ.copy()
@@ -89,21 +124,17 @@ def start_sitl(sitl_tag, args):
         if args.ardupilot_path is not None:
             ardupilot_base = os.path.expanduser(args.ardupilot_path)
             script_path = os.path.join(ardupilot_base, "Tools/autotest/sim_vehicle.py")
-        
-        out_str = f"--out {args.uav_connection} {' '.join([f'--out {address}' for address in args.gs_connection])} "
-        home_dir = os.path.expanduser("~")
-        ardupilot_logs = os.path.join(home_dir, "uav_api_logs", "ardupilot_logs")
-        ardupilot_vehicle = "ArduPlane" if args.vehicle == "plane" else "ArduCopter"
-        terminal_prefix = "" if args.headless else "xterm -e "
-        # MAVProxy quits the moment its stdin reports EOF (mavproxy.py
-        # input_loop), and sim_vehicle.py blocks on MAVProxy and exits with it.
-        # With no terminal to type into there is nothing to lose by disabling
-        # the interactive shell, and everything to lose by leaving it on.
-        mavproxy_args = " --mavproxy-args=--daemon" if args.headless else ""
-        sitl_command = f"{terminal_prefix}{script_path} -v {ardupilot_vehicle} -I {args.sysid} --sysid {args.sysid} -N -L {args.location} --speedup {args.speedup} {out_str} --use-dir={ardupilot_logs}{mavproxy_args}"
+
+        ardupilot_logs = ardupilot_logs_dir(args)
+        sitl_command = build_sitl_command(args, script_path, ardupilot_logs)
 
         if not args.headless:
-            sitl_process = subprocess.Popen(sitl_command.split(" "), env=env)
+            # sim_vehicle.py starts the vehicle binary through
+            # Tools/autotest/run_in_terminal_window.sh; pointing
+            # SITL_RITW_TERMINAL at the same terminal keeps the inner window
+            # consistent with the one wrapping sim_vehicle itself.
+            env["SITL_RITW_TERMINAL"] = args.terminal
+            sitl_process = subprocess.Popen(sitl_command, env=env)
             logger.info(f"SITL started with PID {sitl_process.pid}.")
             return sitl_process
 
@@ -122,7 +153,7 @@ def start_sitl(sitl_tag, args):
         sitl_log = os.path.join(ardupilot_logs, f"sitl_{args.sysid}.log")
         with open(sitl_log, "w") as sitl_out:
             sitl_process = subprocess.Popen(
-                sitl_command.split(" "),
+                sitl_command,
                 env=env,
                 stdout=sitl_out,
                 stderr=subprocess.STDOUT,
@@ -130,8 +161,8 @@ def start_sitl(sitl_tag, args):
             )
         logger.info(f"SITL started headless with PID {sitl_process.pid}. Output: {sitl_log}")
         return sitl_process
-    except:
-        logger.error("Failed to start SITL. Ensure Ardupilot is correctly set up (sim_vehicle.py on PATH or --ardupilot_path set) and the simulation parameters are valid.")
+    except Exception:
+        logger.exception("Failed to start SITL. Ensure Ardupilot is correctly set up (sim_vehicle.py on PATH or --ardupilot_path set) and the simulation parameters are valid.")
         raise
 
 def cleanup_partial_startup(sitl_tag, args):
