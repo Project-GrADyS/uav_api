@@ -2,6 +2,7 @@ from argparse import Namespace
 from fastapi import APIRouter, Depends, HTTPException
 from uav_api.vehicles.plane import Plane
 from uav_api.classes.responses import (
+    COMMAND_FAILED,
     BatteryInfoResponse,
     ErrorInfoResponse,
     GeneralTelemetryResponse,
@@ -17,8 +18,10 @@ router = APIRouter(
 )
 
 
-@router.get("/general", tags=["telemetry"], summary="Returns plane general information from VFR_HUD: airspeed, groundspeed, heading, throttle, altitude", response_model=GeneralTelemetryResponse)
+@router.get("/general", tags=["telemetry"], summary="Returns plane general information from VFR_HUD: airspeed, groundspeed, heading, throttle, altitude", response_model=GeneralTelemetryResponse, responses=COMMAND_FAILED)
 def general_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
+    """Speeds in m/s, heading in degrees, throttle in percent, altitude in
+    meters (MSL)."""
     try:
         info = uav.get_general_info()
     except Exception as e:
@@ -37,8 +40,10 @@ def general_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Dep
     }
 
 
-@router.get("/gps", tags=["telemetry"], summary="Returns the plane current GPS information (sensor-fused position from GLOBAL_POSITION_INT)", response_model=GpsTelemetryResponse)
+@router.get("/gps", tags=["telemetry"], summary="Returns the plane current GPS information (sensor-fused position from GLOBAL_POSITION_INT)", response_model=GpsTelemetryResponse, responses=COMMAND_FAILED)
 def gps_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
+    """Converted to friendly units: lat/lon in degrees, altitudes in meters
+    (relative_alt is above HOME), velocities in m/s, heading in degrees."""
     try:
         info = uav.get_gps_info()
         res_obj = {
@@ -65,8 +70,11 @@ def gps_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends
     return res_obj
 
 
-@router.get("/battery_info", tags=["telemetry"], summary="Returns battery information extracted from SYS_STATUS message", response_model=BatteryInfoResponse)
+@router.get("/battery_info", tags=["telemetry"], summary="Returns battery information extracted from SYS_STATUS message", response_model=BatteryInfoResponse, responses=COMMAND_FAILED)
 def battery_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
+    """Values keep MAVLink's native units: voltage in mV, current in cA (10 mA
+    units, -1 if not measured), battery_remaining in percent (-1 if not
+    estimated)."""
     try:
         info = uav.get_battery_info()
     except Exception as e:
@@ -74,8 +82,11 @@ def battery_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Dep
     return {"device": "uav", "id": str(args.sysid), "result": "success", "info": info}
 
 
-@router.get("/sensor_status", tags=["telemetry"], summary="Returns sensors status extracted from SYS_STATUS message", response_model=SensorStatusResponse)
+@router.get("/sensor_status", tags=["telemetry"], summary="Returns sensors status extracted from SYS_STATUS message", response_model=SensorStatusResponse, responses=COMMAND_FAILED)
 def sensor_status(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
+    """Present/enabled/health flags per sensor (gyro, accelerometer, gps,
+    altitude_control, position_control, radio_receiver, motor_output, battery,
+    pre_arm_check)."""
     try:
         sensors = uav.get_sensor_status()
     except Exception as e:
@@ -83,8 +94,10 @@ def sensor_status(uav: Plane = Depends(get_plane_instance), args: Namespace = De
     return {"device": "uav", "id": str(args.sysid), "result": "success", "status": sensors}
 
 
-@router.get("/error_info", tags=["telemetry"], summary="Returns error information extracted from SYS_STATUS message", response_model=ErrorInfoResponse)
+@router.get("/error_info", tags=["telemetry"], summary="Returns error information extracted from SYS_STATUS message", response_model=ErrorInfoResponse, responses=COMMAND_FAILED)
 def error_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
+    """Communication drop rate (c%), corrupted-packet count, and the non-zero
+    autopilot error counters from SYS_STATUS."""
     try:
         info = uav.get_error_info()
     except Exception as e:
@@ -92,8 +105,11 @@ def error_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depen
     return {"device": "uav", "id": str(args.sysid), "result": "success", "info": info}
 
 
-@router.get("/home_info", tags=["telemetry"], summary="Returns information about HOME position (the (0,0,0) point in static NED frame)", response_model=HomeInfoResponse)
+@router.get("/home_info", tags=["telemetry"], summary="Returns information about HOME position (the (0,0,0) point in static NED frame)", response_model=HomeInfoResponse, responses=COMMAND_FAILED)
 def home_info(uav: Plane = Depends(get_plane_instance), args: Namespace = Depends(get_args)):
+    """Lat/lon in degrees, altitude in meters (MSL). Unlike other telemetry
+    endpoints, the fields sit directly on the envelope instead of nesting
+    under 'info' (historical wire contract)."""
     try:
         info = uav.get_home_position()
         res_obj = {

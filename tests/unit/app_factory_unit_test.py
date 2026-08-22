@@ -46,3 +46,33 @@ def test_vehicle_dependency_adds_no_query_params(copter_client):
     param_names = {p["name"] for p in arm.get("parameters", [])}
     assert "sysid" not in param_names
     assert "connection" not in param_names
+
+
+def _operations(schema):
+    for path, methods in schema["paths"].items():
+        for method, operation in methods.items():
+            yield path, method, operation
+
+
+def test_every_route_has_a_summary(copter_args, plane_args):
+    for args in (copter_args, plane_args):
+        schema = create_app(args).openapi()
+        missing = [f"{method.upper()} {path}"
+                   for path, method, operation in _operations(schema)
+                   if not operation.get("summary")]
+        assert not missing, f"routes without a summary: {missing}"
+
+
+def test_every_used_tag_is_described(copter_args, plane_args):
+    for args in (copter_args, plane_args):
+        schema = create_app(args).openapi()
+        described = {tag["name"] for tag in schema.get("tags", []) if tag.get("description")}
+        used = {tag for _, _, operation in _operations(schema)
+                for tag in operation.get("tags", [])}
+        assert used <= described, f"tags without a description: {used - described}"
+
+
+def test_take_photo_declares_jpeg_response(copter_args):
+    schema = create_app(copter_args).openapi()
+    responses = schema["paths"]["/peripherical/take_photo"]["get"]["responses"]
+    assert "image/jpeg" in responses["200"]["content"]
