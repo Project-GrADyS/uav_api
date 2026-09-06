@@ -5,9 +5,11 @@ import time
 import subprocess
 import os
 
+from collections import deque
 from datetime import datetime
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from typing import Literal
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
 from uav_api.routers.dependencies import get_args, get_scripts_table
 from uav_api.classes.script import Script
 from uav_api.classes.responses import (
@@ -16,6 +18,7 @@ from uav_api.classes.responses import (
     ExecuteScriptResponse,
     ListScriptsResponse,
     RunningScriptsResponse,
+    ScriptLogResponse,
     StopScriptResponse,
     UploadScriptResponse,
 )
@@ -176,6 +179,46 @@ def stop_script(script: Script, args = Depends(get_args), scripts_table = Depend
     info["stopped_at"] = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     return {"device": "uav", "id": str(args.sysid), "result": "success", "type": 52, "script": safe_name, "info": "Stopped"}
+
+@router.get("/script-log", tags=["mission"], summary="Reads the tail of a mission script's stdout or stderr log", response_model=ScriptLogResponse, responses=error_responses({404: "The script was never executed, or its log file is missing.", 500: "The log file could not be read."}))
+def script_log(
+    script_name: str = Query(description="Script filename. Directory components are stripped and '.py' is appended when missing, matching the other /mission endpoints."),
+    stream: Literal["out", "err"] = Query("out", description="Which stream to read: 'out' for stdout, 'err' for stderr."),
+    tail: int = Query(200, ge=1, le=1000, description="Number of trailing lines to return."),
+    args = Depends(get_args),
+    scripts_table = Depends(get_scripts_table),
+):
+    """Reads the log file recorded for the script by /mission/execute-script/.
+    Stopped scripts stay in the scripts table for the lifetime of the API
+    process, so their logs remain readable after the flight."""
+    safe_name = Path(script_name).name
+    if not safe_name.endswith(".py"):
+        safe_name = safe_name + ".py"
+
+    info = scripts_table.get(safe_name)
+    if info is None:
+        raise HTTPException(status_code=404, detail=f"Script '{safe_name}' not found in scripts table.")
+
+    log_path = Path(info["out_log"] if stream == "out" else info["err_log"]).expanduser()
+    if not log_path.is_file():
+        raise HTTPException(status_code=404, detail=f"Log file for '{safe_name}' ({stream}) not found at {log_path}.")
+
+    try:
+        # Scripts are read while running, so decoding errors are expected on a
+        # partially-written final line; replace rather than fail the request.
+        with log_path.open("r", errors="replace") as f:
+            lines = deque(f, maxlen=tail)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SCRIPT LOG FAIL: {e}")
+
+    return {
+        "device": "uav",
+        "id": str(args.sysid),
+        "result": "success",
+        "script": safe_name,
+        "stream": stream,
+        "lines": [line.rstrip("\n") for line in lines],
+    }
 
 @router.delete("/clear-scripts", tags=["mission"], summary="Removes all script files (.py and .sh) from the scripts directory", response_model=ClearScriptsResponse, responses=error_responses({500: "A script file could not be removed."}))
 def clear_scripts(args = Depends(get_args)):

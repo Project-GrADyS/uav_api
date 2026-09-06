@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `flight_mode` in the `--gradys_gs` location push: the vehicle's current mode
+  name (`GUIDED`, `LOITER`, `RTL`, ...), from a new `Vehicle.get_flight_mode()`.
+  Sent as the string `"None"` before the first HEARTBEAT, so consumers can tell
+  "not yet known" from a real mode. The README's description of the push payload
+  was stale and is now a full field table.
+- `GET /mission/script-log`: reads the tail of a mission script's stdout or
+  stderr — the files `/mission/execute-script/` already redirects the process
+  into, which until now were only reachable by SSH-ing to the vehicle. Query
+  params `script_name` (normalized like the other `/mission` routes), `stream`
+  (`out`/`err`, default `out`) and `tail` (1–1000, default 200). Readable while
+  the script runs and after it stops, since the scripts table retains stopped
+  entries. New `ScriptLogResponse` extends `UavResponse` rather than
+  `MissionResponse`: the numeric `type` codes are deprecated, so this endpoint
+  mints no new one.
+
 ## [0.3.0] - 2026-08-22
 
 ### Added

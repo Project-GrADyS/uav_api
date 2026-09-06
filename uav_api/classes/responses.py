@@ -209,3 +209,11 @@ class StopScriptResponse(MissionResponse):
 class ClearScriptsResponse(MissionResponse):
     info: str = Field(description="Summary of how many script files were removed.")
     removed: list[str] = Field(description="Filenames of the removed script files.")
+
+
+class ScriptLogResponse(UavResponse):
+    # Deliberately extends UavResponse, not MissionResponse: the numeric `type`
+    # codes are deprecated, so this endpoint does not mint a new one.
+    script: str = Field(description="Filename of the script whose log was read (with its .py suffix).")
+    stream: Literal["out", "err"] = Field(description="Which stream was read: 'out' for stdout, 'err' for stderr.")
+    lines: list[str] = Field(description="Last `tail` lines of the log file, oldest first, without trailing newlines.")

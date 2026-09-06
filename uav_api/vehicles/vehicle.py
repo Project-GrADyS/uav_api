@@ -1849,6 +1849,17 @@ class Vehicle:
     def get_general_info(self, timeout=5):
         return self.get_last_message("VFR_HUD")
 
+    def get_flight_mode(self):
+        """Current flight mode name, e.g. 'GUIDED', 'LOITER', 'RTL'.
+
+        Derived from HEARTBEAT by pymavlink. Returns None before the first
+        heartbeat arrives -- callers must treat 'unknown mode' as distinct
+        from any real mode rather than substituting a default.
+        """
+        if "HEARTBEAT" not in self.mav.messages:
+            return None
+        return self.mav.flightmode
+
     def get_compass_info(self, timeout=5):
         # MAG_CAL_REPORT is only emitted during a compass calibration, so it
         # is normally absent (always, in SITL).

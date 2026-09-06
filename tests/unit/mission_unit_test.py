@@ -185,3 +185,115 @@ class TestClear:
         assert r.status_code == 200
         assert sorted(r.json()["removed"]) == ["other.sh", "test_script.py"]
         assert list(Path(copter_args.scripts_path).iterdir()) == []
+
+
+class TestScriptLog:
+    """script-log reads the files execute-script redirects the process into.
+    tmux is mocked here, so no process writes them — the tests create the log
+    files at the paths the router recorded in the scripts table."""
+
+    def _run_and_write_logs(self, client, scripts_table, out="", err=""):
+        upload(client)
+        client.post("/mission/execute-script/", json={"script_name": "test_script"})
+        entry = scripts_table["test_script.py"]
+        Path(entry["out_log"]).write_text(out)
+        Path(entry["err_log"]).write_text(err)
+        return entry
+
+    def test_reads_stdout_by_default(self, copter_client, scripts_table, tmux_calls):
+        self._run_and_write_logs(copter_client, scripts_table, out="line 1\nline 2\n")
+        r = copter_client.get("/mission/script-log", params={"script_name": "test_script"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["script"] == "test_script.py"
+        assert body["stream"] == "out"
+        assert body["lines"] == ["line 1", "line 2"]
+        # This endpoint deliberately mints no deprecated numeric code.
+        assert "type" not in body
+
+    def test_reads_stderr(self, copter_client, scripts_table, tmux_calls):
+        self._run_and_write_logs(copter_client, scripts_table, out="out\n", err="boom\n")
+        r = copter_client.get(
+            "/mission/script-log", params={"script_name": "test_script", "stream": "err"}
+        )
+        assert r.status_code == 200
+        assert r.json()["lines"] == ["boom"]
+
+    def test_tail_keeps_the_newest_lines(self, copter_client, scripts_table, tmux_calls):
+        self._run_and_write_logs(
+            copter_client, scripts_table, out="".join(f"line {i}\n" for i in range(10))
+        )
+        r = copter_client.get(
+            "/mission/script-log", params={"script_name": "test_script", "tail": 3}
+        )
+        assert r.status_code == 200
+        assert r.json()["lines"] == ["line 7", "line 8", "line 9"]
+
+    def test_partial_final_line_is_returned(self, copter_client, scripts_table, tmux_calls):
+        # A log being written concurrently routinely ends without a newline.
+        self._run_and_write_logs(copter_client, scripts_table, out="done\npartial")
+        r = copter_client.get("/mission/script-log", params={"script_name": "test_script"})
+        assert r.json()["lines"] == ["done", "partial"]
+
+    def test_undecodable_bytes_do_not_fail_the_request(
+        self, copter_client, scripts_table, tmux_calls
+    ):
+        entry = self._run_and_write_logs(copter_client, scripts_table)
+        Path(entry["out_log"]).write_bytes(b"ok\n\xff\xfe\n")
+        r = copter_client.get("/mission/script-log", params={"script_name": "test_script"})
+        assert r.status_code == 200
+        assert r.json()["lines"][0] == "ok"
+
+    def test_empty_log_is_empty_list(self, copter_client, scripts_table, tmux_calls):
+        self._run_and_write_logs(copter_client, scripts_table, out="")
+        r = copter_client.get("/mission/script-log", params={"script_name": "test_script"})
+        assert r.status_code == 200
+        assert r.json()["lines"] == []
+
+    def test_name_is_normalized_like_the_other_routes(
+        self, copter_client, scripts_table, tmux_calls
+    ):
+        self._run_and_write_logs(copter_client, scripts_table, out="hi\n")
+        # no .py suffix, plus a directory component to strip
+        r = copter_client.get("/mission/script-log", params={"script_name": "../test_script"})
+        assert r.status_code == 200
+        assert r.json()["script"] == "test_script.py"
+
+    def test_readable_after_stop(self, copter_client, scripts_table, tmux_calls):
+        self._run_and_write_logs(copter_client, scripts_table, out="hi\n")
+        copter_client.post("/mission/stop-script/", json={"script_name": "test_script"})
+        # Stopped entries are retained, so post-flight review still works.
+        r = copter_client.get("/mission/script-log", params={"script_name": "test_script"})
+        assert r.status_code == 200
+        assert r.json()["lines"] == ["hi"]
+
+    def test_unknown_script_is_404(self, copter_client):
+        r = copter_client.get("/mission/script-log", params={"script_name": "ghost"})
+        assert r.status_code == 404
+        assert "not found in scripts table" in r.json()["detail"]
+
+    def test_missing_log_file_is_404(self, copter_client, scripts_table, tmux_calls):
+        upload(copter_client)
+        copter_client.post("/mission/execute-script/", json={"script_name": "test_script"})
+        # tmux is mocked, so the redirect target was never created.
+        r = copter_client.get("/mission/script-log", params={"script_name": "test_script"})
+        assert r.status_code == 404
+        assert "Log file" in r.json()["detail"]
+
+    def test_missing_script_name_is_422(self, copter_client):
+        assert copter_client.get("/mission/script-log").status_code == 422
+
+    def test_invalid_stream_is_422(self, copter_client, scripts_table, tmux_calls):
+        self._run_and_write_logs(copter_client, scripts_table, out="hi\n")
+        r = copter_client.get(
+            "/mission/script-log", params={"script_name": "test_script", "stream": "both"}
+        )
+        assert r.status_code == 422
+
+    @pytest.mark.parametrize("tail", [0, 1001])
+    def test_out_of_range_tail_is_422(self, copter_client, scripts_table, tmux_calls, tail):
+        self._run_and_write_logs(copter_client, scripts_table, out="hi\n")
+        r = copter_client.get(
+            "/mission/script-log", params={"script_name": "test_script", "tail": tail}
+        )
+        assert r.status_code == 422

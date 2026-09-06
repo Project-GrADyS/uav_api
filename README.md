@@ -473,7 +473,24 @@ When `--gradys_gs <host:port>` is set, the API starts a background coroutine tha
 uav-api --port 8000 --sysid 1 --gradys_gs 192.168.1.10:5000
 ```
 
-Each POST to `http://<gradys_gs>/update-info/` includes: latitude, longitude, altitude, device type, a sequence number, and the API's own IP and port. This allows the Gradys ecosystem to track the UAV in real time.
+Each POST to `http://<gradys_gs>/update-info/` is form-encoded and carries:
+
+| Field | Meaning |
+|---|---|
+| `id` | MAVLink system id (`--sysid`) |
+| `lat` / `lng` | Degrees (note: `lng` here, `lon` in `/telemetry` replies) |
+| `alt` | **Metres above HOME**, not MSL |
+| `ground_speed` / `air_speed` | m/s |
+| `heading` | Degrees, 0-360 |
+| `battery_percent` | Percent, `-1` when not estimated |
+| `flight_mode` | Mode name, e.g. `GUIDED`, `LOITER`, `RTL`; `None` before the first heartbeat |
+| `ready_to_arm` | Prearm check present+enabled+healthy; `None` if no SYS_STATUS in 5 s |
+| `device` | Always `uav` |
+| `type` | `102` (internal location-update code) |
+| `seq` | Increments only on HTTP 200 |
+| `ip` | `<detected_ip>:<port>/` — how the GS learns where to send commands back |
+
+This allows the Gradys ecosystem to track the UAV in real time.
 
 ## Visual Feedback with Mission Planner
 

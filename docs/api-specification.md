@@ -521,6 +521,40 @@ Stops a running mission script. Sends `Ctrl+C` to the tmux session (allowing `fi
 
 ---
 
+### `GET /mission/script-log`
+Returns the tail of a mission script's stdout or stderr log — the files
+`/mission/execute-script/` redirects the process into. Read-only.
+
+| Query param | Type | Default | Description |
+|-------------|------|---------|-------------|
+| `script_name` | str | *(required)* | Script filename; directory components stripped and `.py` appended if missing, as on the other `/mission` routes |
+| `stream` | str | `out` | `out` for stdout, `err` for stderr |
+| `tail` | int | 200 | Number of trailing lines (must be 1–1000) |
+
+**Response:**
+```json
+{
+  "device": "uav", "id": "1", "result": "success",
+  "script": "my_script.py", "stream": "out",
+  "lines": ["takeoff to 15m", "waypoint 1 reached"]
+}
+```
+
+> Unlike the other `/mission` responses this one carries **no `type` code** —
+> those codes are deprecated, so new endpoints do not mint them.
+
+**Behavior:**
+- The script is looked up in the in-memory scripts table, so it must have been
+  started at least once by this API process. Entries are retained after the
+  script stops, so logs stay readable for post-flight review.
+- Lines are returned oldest-first with trailing newlines stripped. Decoding
+  errors are replaced rather than raised — a log being written concurrently
+  routinely ends in a partial line.
+
+**Errors:** 404 if the script is not in the scripts table, or its log file is missing; 500 if the file cannot be read.
+
+---
+
 ### `DELETE /mission/clear-scripts`
 Deletes all `.py` and `.sh` files from the scripts directory.
 

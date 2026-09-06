@@ -51,6 +51,7 @@ async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
                 location = uav.get_gps_info()
                 general_info = uav.get_general_info()
                 battery_info = uav.get_battery_info()
+                flight_mode = uav.get_flight_mode()
             except Exception:
                 _logger.warning("Failed to fetch location")
                 continue
@@ -64,6 +65,7 @@ async def send_location_to_gradys_gs(uav, session, api_port, gradys_gs_address):
                 "air_speed": str(general_info.airspeed),
                 "heading": str(general_info.heading),
                 "battery_percent": str(battery_info["battery_remaining"]),
+                "flight_mode": str(flight_mode),
                 "ready_to_arm": uav.sensor_has_state_cached(mavutil.mavlink.MAV_SYS_STATUS_PREARM_CHECK, True, True, True),
                 "device": "uav",
                 "type": 102, # Internal UAV location update message type,

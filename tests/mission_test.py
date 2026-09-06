@@ -26,7 +26,7 @@ SCRIPTS_PATH = os.path.expanduser("~/.uav_api/scripts")
 @pytest.fixture(scope="module", autouse=True)
 def clean_test_scripts():
     """Remove test scripts left on disk by previous runs."""
-    for pattern in ("test_script.*", "lifecycle_script.*", "short_script.*"):
+    for pattern in ("test_script.*", "lifecycle_script.*", "short_script.*", "log_script.*"):
         for path in glob.glob(os.path.join(SCRIPTS_PATH, pattern)):
             os.remove(path)
     yield
@@ -159,3 +159,55 @@ class TestScriptLifecycle:
     def test_lifecycle_cleanup(self, api):
         r = api.delete("/mission/clear-scripts")
         assert r.status_code == 200
+
+
+# Writes to both streams, then stays alive so the log can be read mid-run.
+LOGGING_SCRIPT = (
+    b"import sys, time\n"
+    b"print('hello stdout', flush=True)\n"
+    b"print('hello stderr', file=sys.stderr, flush=True)\n"
+    b"time.sleep(30)\n"
+)
+
+
+class TestScriptLog:
+    """End-to-end: a real tmux session writes real log files, and script-log
+    reads them both while running and after the script is stopped. The edge
+    cases (tail, normalization, 404s, 422s) live in the unit layer."""
+
+    def test_reads_real_logs_while_running(self, api):
+        r = api.post(
+            "/mission/upload-script",
+            files={"file": ("log_script.py", LOGGING_SCRIPT, "text/x-python")},
+        )
+        assert r.status_code == 200
+        r = api.post("/mission/execute-script/", json={"script_name": "log_script.py"})
+        assert r.status_code == 200
+
+        # tmux needs a moment to start the interpreter and flush the first line.
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            r = api.get("/mission/script-log", params={"script_name": "log_script.py"})
+            if r.status_code == 200 and "hello stdout" in r.json()["lines"]:
+                break
+            time.sleep(1)
+        else:
+            raise AssertionError("script-log never returned the script's stdout")
+
+        r = api.get(
+            "/mission/script-log", params={"script_name": "log_script.py", "stream": "err"}
+        )
+        assert r.status_code == 200
+        assert "hello stderr" in r.json()["lines"]
+
+    def test_log_survives_stop(self, api):
+        r = api.post("/mission/stop-script/", json={"script_name": "log_script.py"})
+        assert r.status_code == 200
+        assert "log_script.py" not in running_script_names(api)
+
+        r = api.get("/mission/script-log", params={"script_name": "log_script.py"})
+        assert r.status_code == 200
+        assert "hello stdout" in r.json()["lines"]
+
+    def test_script_log_cleanup(self, api):
+        assert api.delete("/mission/clear-scripts").status_code == 200
