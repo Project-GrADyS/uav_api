@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--mavlink_streamrate` (default `5`, Hz; also `[api] mavlink_streamrate` in
+  config files) exposes the `MAV_DATA_STREAM_ALL` rate requested from the
+  autopilot, which was hardcoded at 5. **The default is unchanged, so no
+  existing deployment changes behaviour.** Non-positive values are rejected at
+  startup. Under SITL the effective rate is this value × `--speedup`.
+
+### Fixed
+- Under SITL the stream rate was silently MAVProxy's 4 Hz, not the API's 5 Hz:
+  MAVProxy periodically re-sends `REQUEST_DATA_STREAM` at its own
+  `--streamrate`, overwriting the API's request. The SITL command now passes
+  `--streamrate=<mavlink_streamrate>` through `--mavproxy-args`, so simulated
+  vehicles stream at 5 Hz by default (previously an effective 4 Hz).
+
 ## [0.3.0] - 2026-08-22
 
 ### Added

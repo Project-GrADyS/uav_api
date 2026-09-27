@@ -103,13 +103,21 @@ def build_sitl_command(args, script_path, ardupilot_logs):
         sitl_command += ["--out", address]
     sitl_command.append(f"--use-dir={ardupilot_logs}")
 
+    # MAVProxy sits between SITL and the API and periodically re-sends
+    # REQUEST_DATA_STREAM at its own --streamrate (default 4), overwriting the
+    # rate the API requests. Hand it the same rate so --mavlink_streamrate
+    # holds under SITL.
+    mavproxy_args = [f"--streamrate={int(args.mavlink_streamrate)}"]
     if args.headless:
         # MAVProxy quits the moment its stdin reports EOF (mavproxy.py
         # input_loop), and sim_vehicle.py blocks on MAVProxy and exits with it.
         # With no terminal to type into there is nothing to lose by disabling
         # the interactive shell, and everything to lose by leaving it on.
-        sitl_command.append("--mavproxy-args=--daemon")
-    else:
+        mavproxy_args.append("--daemon")
+    # sim_vehicle.py takes a single --mavproxy-args string and splits it on spaces.
+    sitl_command.append(f"--mavproxy-args={' '.join(mavproxy_args)}")
+
+    if not args.headless:
         # shlex.split handles multi-token terminals like "gnome-terminal --".
         sitl_command = shlex.split(args.terminal) + sitl_command
 
@@ -199,9 +207,9 @@ async def lifespan(app: FastAPI):
     try:
         logger.info("Connecting to vehicle...")
         if args.vehicle == "plane":
-            vehicle = init_plane(args.sysid, conn)
+            vehicle = init_plane(args.sysid, conn, args.mavlink_streamrate)
         else:
-            vehicle = init_copter(args.sysid, conn)
+            vehicle = init_copter(args.sysid, conn, args.mavlink_streamrate)
         logger.info("Vehicle connection established.")
     except Exception as e:
         logger.error(f"Failed to connect to vehicle on {conn}: {e}")
@@ -265,4 +273,4 @@ async def lifespan(app: FastAPI):
         kill_sitl_by_tag(sitl_tag)
         logger.info("SITL and associated windows closed.")
 
-    logger.info("UAV_API has shutdown gracefully.")
+    logger.info("UAV_API has shutdown gracefully.")
