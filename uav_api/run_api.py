@@ -1,7 +1,8 @@
 import multiprocessing
+import sys
 import uvicorn
 
-from uav_api.args import parse_args, write_args_to_env
+from uav_api.args import parse_args, split_command, write_args_to_env
 from uav_api.setup import setup
 from uav_api.log import build_hypercorn_log_config, set_log_config
 
@@ -54,9 +55,18 @@ def spawn_with_args(raw_args=None):
     process.start()
     return process
 
-def main():
+def main(argv=None):
+    command, rest = split_command(sys.argv[1:] if argv is None else argv)
+    if command == "setup-sitl":
+        from uav_api.setup_sitl import main as setup_sitl_main
+        try:
+            setup_sitl_main(rest)
+        except KeyboardInterrupt:
+            raise SystemExit("setup-sitl interrupted.")
+        return
+
     try:
-        run_with_args()
+        run_with_args(rest)
     except KeyboardInterrupt:
         print("UAV API process terminated.")
 

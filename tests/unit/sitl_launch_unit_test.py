@@ -40,7 +40,33 @@ def test_headless_daemonizes_mavproxy_and_drops_the_terminal():
     args = parse_args(["--simulated", "--headless"])
     cmd = build_sitl_command(args, "sim_vehicle.py", "/logs")
     assert cmd[0] == "sim_vehicle.py"
-    assert "--mavproxy-args=--daemon" in cmd
+    assert "--daemon" in mavproxy_args(cmd)
+
+
+def mavproxy_args(cmd):
+    """The tokens of the single --mavproxy-args value sim_vehicle.py accepts."""
+    [value] = [c.split("=", 1)[1] for c in cmd if c.startswith("--mavproxy-args=")]
+    return value.split(" ")
+
+
+def test_windowed_mavproxy_is_not_daemonized():
+    args = parse_args(["--simulated"])
+    assert "--daemon" not in mavproxy_args(build_sitl_command(args, "sim_vehicle.py", "/logs"))
+
+
+@pytest.mark.parametrize("headless", [[], ["--headless"]])
+def test_mavproxy_streamrate_follows_mavlink_streamrate(headless):
+    # MAVProxy re-requests its own rate periodically; without this it would
+    # overwrite --mavlink_streamrate with its default of 4 Hz.
+    args = parse_args(["--simulated", "--mavlink_streamrate", "12", *headless])
+    assert "--streamrate=12" in mavproxy_args(build_sitl_command(args, "sim_vehicle.py", "/logs"))
+
+
+def test_mavproxy_streamrate_from_config_string(tmp_path):
+    config = tmp_path / "uav.ini"
+    config.write_text("[simulated]\n[api]\nmavlink_streamrate = 7\n")
+    args = parse_args(["--config", str(config)])
+    assert "--streamrate=7" in mavproxy_args(build_sitl_command(args, "sim_vehicle.py", "/logs"))
 
 
 def test_terminal_is_configurable_and_shell_split():

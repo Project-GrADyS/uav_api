@@ -4,7 +4,7 @@
 ; gradys-fleet (roles/uav_api/templates/uav-api.ini.j2).
 ;
 ; Install to /etc/gradys/uav-api.ini and pass it with:
-;     uav-api --config /etc/gradys/uav-api.ini
+;     uav-api start --config /etc/gradys/uav-api.ini
 ;
 ; IMPORTANT: a real-drone config must NOT contain a [simulated] section. The
 ; mere presence of that section switches the API into simulated mode, whatever

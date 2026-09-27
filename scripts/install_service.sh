@@ -70,7 +70,7 @@ After=network.target
 Type=simple
 User=pi
 Environment=PATH=/home/pi/.venv/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/pi/.venv/bin/uav-api --config $CONFIG_FILE
+ExecStart=/home/pi/.venv/bin/uav-api start --config $CONFIG_FILE
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

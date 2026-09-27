@@ -33,7 +33,7 @@ WorkingDirectory=__HOME__
 # --python_path defaults to bare `python3`. This PATH is what makes scripts
 # uploaded through /mission/upload-script run under the venv interpreter.
 Environment=PATH=__VENV__/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=__VENV__/bin/uav-api --config __CONFIG__
+ExecStart=__VENV__/bin/uav-api start --config __CONFIG__
 # If uav_api dies mid-flight the flight controller keeps executing its last
 # command, but the vehicle is uncommandable until the API returns.
 Restart=always
