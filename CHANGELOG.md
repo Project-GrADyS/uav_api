@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `uav-api setup-sitl`: one command that installs ArduPilot SITL. It clones
+  ArduPilot (or reuses an existing checkout), runs the Debian/Ubuntu
+  prerequisites script, builds the copter/plane SITL binaries, adds
+  `Tools/autotest` to `PATH` in the shell rc, and registers uav_api's SITL
+  locations. Every step can be re-run safely; `--skip_prereqs`, `--skip_build`
+  and `--no_path` opt out of individual steps.
+- `uav-api start`: the API launcher is now a subcommand.
+
+### Changed
+- `uav-api` with options and no command is an alias for `uav-api start`, so
+  existing `uav-api --config ...` invocations keep working. The systemd unit
+  and `install_service.sh` now spell out `start`.
+
 ## [0.3.0] - 2026-08-22
 
 ### Added

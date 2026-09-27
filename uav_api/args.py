@@ -4,6 +4,7 @@ import json
 import argparse
 import logging
 import os
+import sys
 
 # Section names accepted in config files, mirroring the five argument groups
 # below (parse_mode, parse_api, parse_logs, parse_simulated, parse_udp).
@@ -50,7 +51,10 @@ def coerce_bool(key, value):
     )
 
 def parse_args(raw_args=None):
-    parser = argparse.ArgumentParser(description="Welcome to the UAV Runner, this script runs an API that interfaces with Ardupilots instances (real or simulated).")
+    parser = argparse.ArgumentParser(
+        prog="uav-api start",
+        description="Welcome to the UAV Runner, this script runs an API that interfaces with Ardupilots instances (real or simulated)."
+    )
     parse_mode(parser)
     parse_api(parser)
     parse_logs(parser)
@@ -102,6 +106,105 @@ def parse_args(raw_args=None):
                     )
     return args
     
+COMMANDS = {
+    "start": "Run the API (real drone, or SITL with --simulated). Default when no command is given.",
+    "setup-sitl": "Install ArduPilot SITL: clone, install prerequisites, build, register PATH and locations.",
+}
+
+def top_level_help():
+    lines = [
+        "usage: uav-api [start|setup-sitl] [options]",
+        "",
+        "HTTP interface for MAVLink commands on ArduPilot vehicles.",
+        "",
+        "commands:",
+    ]
+    lines += [f"  {name:<12}{text}" for name, text in COMMANDS.items()]
+    lines += [
+        "",
+        "With no command, the options are passed to 'start', so 'uav-api --config x.ini'",
+        "is the same as 'uav-api start --config x.ini'.",
+        "Run 'uav-api <command> --help' for the options of each command.",
+    ]
+    return "\n".join(lines)
+
+def split_command(argv):
+    """Split argv into (command, remaining args).
+
+    A bare invocation (no command word) is an alias for `start`: deployed
+    systemd units and scripts run `uav-api --config ...` and must keep working.
+    """
+    if argv and argv[0] in COMMANDS:
+        return argv[0], argv[1:]
+    if argv and argv[0] in ("-h", "--help"):
+        print(top_level_help())
+        raise SystemExit(0)
+    if argv and not argv[0].startswith("-"):
+        print(top_level_help(), file=sys.stderr)
+        raise SystemExit(f"uav-api: unknown command '{argv[0]}'")
+    return "start", argv
+
+def parse_setup_sitl_args(raw_args=None):
+    parser = argparse.ArgumentParser(
+        prog="uav-api setup-sitl",
+        description="Install ArduPilot SITL so 'uav-api start --simulated' can run: "
+                    "clone ArduPilot, install its prerequisites, build the SITL "
+                    "binaries, put sim_vehicle.py on PATH and register uav_api's "
+                    "SITL locations. Safe to re-run."
+    )
+
+    parser.add_argument(
+        '--ardupilot_path',
+        dest='ardupilot_path',
+        default="~/ardupilot",
+        help="Where the ArduPilot checkout lives. Cloned there if the directory does not exist; "
+             "an existing ArduPilot checkout is reused."
+    )
+
+    parser.add_argument(
+        '--branch',
+        dest='branch',
+        default=None,
+        help="Branch or tag to clone (e.g. Copter-4.5). Defaults to ArduPilot's default branch. "
+             "Ignored when the checkout already exists."
+    )
+
+    parser.add_argument(
+        '--vehicle',
+        dest='vehicle',
+        choices=['copter', 'plane'],
+        nargs='+',
+        default=['copter', 'plane'],
+        help="Which SITL binaries to build (default: both)."
+    )
+
+    parser.add_argument(
+        '--skip_prereqs',
+        dest='skip_prereqs',
+        action='store_true',
+        default=False,
+        help="Do not run ArduPilot's install-prereqs script (it uses sudo and apt)."
+    )
+
+    parser.add_argument(
+        '--skip_build',
+        dest='skip_build',
+        action='store_true',
+        default=False,
+        help="Do not build the SITL binaries."
+    )
+
+    parser.add_argument(
+        '--no_path',
+        dest='no_path',
+        action='store_true',
+        default=False,
+        help="Do not add Tools/autotest to PATH in your shell rc file; "
+             "pass --ardupilot_path to 'uav-api start' instead."
+    )
+
+    return parser.parse_args(raw_args)
+
 # MODE PARSER
 def parse_mode(mode_parser):
 
@@ -311,4 +414,4 @@ def parse_udp(udp_parser):
         dest='keyfile',
         default=None,
         help='Path to TLS private key PEM file (for --udp mode). Auto-generated under <root_dir>/certs if omitted.'
-    )
+    )

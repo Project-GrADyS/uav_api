@@ -24,6 +24,8 @@ HTTP REST API for controlling ArduPilot-compatible UAVs. Supports real drones vi
   - [Running with a real drone](#running-with-a-real-drone)
   - [Deploying on hardware](#deploying-on-hardware)
   - [Running in simulation (SITL)](#running-in-simulation-sitl)
+    - [Setting up SITL (`setup-sitl`)](#setting-up-sitl-setup-sitl)
+    - [Starting a simulated vehicle](#starting-a-simulated-vehicle)
     - [Running headless](#running-headless)
     - [Locating ArduPilot (`--ardupilot_path`)](#locating-ardupilot---ardupilot_path)
     - [Registering ArduPilot in PATH](#registering-ardupilot-in-path)
@@ -87,6 +89,7 @@ example clients. Reference material lives under [`docs/`](docs/):
 
 - Python 3.10+
 - For simulated flights: ArduPilot repository built locally, and `xterm` installed — unless you pass [`--headless`](#running-headless), which needs no X server at all.
+  - On Debian/Ubuntu, [`uav-api setup-sitl`](#setting-up-sitl-setup-sitl) does all of this for you.
   - Clone and build ArduPilot: https://ardupilot.org/dev/docs/where-to-get-the-code.html
   - SITL setup guide: https://ardupilot.org/dev/docs/SITL-setup-landingpage.html
   - ArduPilot's `Tools/autotest` directory should be on your `PATH` so `sim_vehicle.py` can be found — see [Registering ArduPilot in PATH](#registering-ardupilot-in-path). Otherwise, point the API at the repository with `--ardupilot_path`.
@@ -114,12 +117,21 @@ Restart your terminal after installation.
 
 # Getting Started
 
+`uav-api` has two commands:
+
+| Command | What it does |
+|---------|--------------|
+| `uav-api start [options]` | Runs the API, against a real drone or against SITL with `--simulated`. |
+| `uav-api setup-sitl [options]` | Installs ArduPilot SITL once per machine — see [Setting up SITL](#setting-up-sitl-setup-sitl). |
+
+Running `uav-api` with options and no command is the same as `uav-api start`, so existing scripts and systemd units written as `uav-api --config ...` keep working.
+
 ## Running with a real drone
 
 Connect your drone via UDP or USB, then start the API:
 
 ```bash
-uav-api --port 8000 --uav_connection 127.0.0.1:17171 --connection_type udpin --sysid 1
+uav-api start --port 8000 --uav_connection 127.0.0.1:17171 --connection_type udpin --sysid 1
 ```
 
 The `--connection_type` controls the UDP direction:
@@ -167,10 +179,41 @@ notes, why the unit is written the way it is, and troubleshooting.
 
 ## Running in simulation (SITL)
 
+### Setting up SITL (`setup-sitl`)
+
+Run this once per machine, as your normal user (not root). It asks for your password when it calls sudo:
+
+```bash
+uav-api setup-sitl
+source ~/.bashrc
+```
+
+It takes several minutes. Each step is skipped when it's already done, so re-running it is safe:
+
+1. Clones ArduPilot (with submodules) into `--ardupilot_path` (default `~/ardupilot`). If the directory is already an ArduPilot checkout, it is reused and only its submodules are updated. Any other existing directory is refused.
+2. Runs ArduPilot's `Tools/environment_install/install-prereqs-ubuntu.sh -y` (Debian/Ubuntu only; on other systems it prints a warning and you install the prerequisites by hand).
+3. Builds the SITL binaries (`./waf configure --board sitl`, then `./waf copter` and/or `./waf plane`). On Ubuntu 23.04+ the prereqs script creates `~/venv-ardupilot`, and the build uses it.
+4. Adds `Tools/autotest` to `PATH` in `~/.bashrc` (`~/.zshrc` for zsh), unless it's already there.
+5. Registers uav_api's SITL home locations in `~/.config/ardupilot/locations.txt`.
+6. Checks that the binaries exist, and warns when `xterm` or `tmux` is missing.
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--ardupilot_path` | `~/ardupilot` | Where the ArduPilot checkout lives or will be cloned |
+| `--branch` | ArduPilot default | Branch or tag to clone (e.g. `Copter-4.5`). Ignored when the checkout exists. |
+| `--vehicle` | `copter plane` | Which SITL binaries to build |
+| `--skip_prereqs` | off | Don't run the prereqs script (no sudo/apt) |
+| `--skip_build` | off | Don't build; `sim_vehicle.py` builds on first start instead |
+| `--no_path` | off | Don't touch your shell rc; pass `--ardupilot_path` to `uav-api start` instead |
+
+> On Ubuntu, the prereqs script adds lines to `~/.bashrc`/`~/.profile` that activate `~/venv-ardupilot` in new shells. If you installed uav-api in a different virtualenv, activate that one after opening the shell.
+
+### Starting a simulated vehicle
+
 This starts both ArduCopter SITL (in a new `xterm` window) and the API — see [Running headless](#running-headless) for the no-window variant:
 
 ```bash
-uav-api --simulated --speedup 1 --port 8000 --sysid 1
+uav-api start --simulated --speedup 1 --port 8000 --sysid 1
 ```
 
 SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`). The `--speedup` factor controls simulation speed (e.g. `5` = 5× real time). The `--location` argument sets the SITL home position (default `AbraDF`).
@@ -180,7 +223,7 @@ SITL will bind to the address in `--uav_connection` (default `127.0.0.1:17171`).
 `--headless` runs the same simulation without opening any window, so it works on a machine with no X server — CI, a remote box, or over SSH:
 
 ```bash
-uav-api --simulated --headless --speedup 1 --port 8000 --sysid 1
+uav-api start --simulated --headless --speedup 1 --port 8000 --sysid 1
 ```
 
 This does three things, and all three are required:
@@ -211,10 +254,10 @@ Simulated mode launches SITL through ArduPilot's `sim_vehicle.py` script. How th
 
 ```bash
 # Default — sim_vehicle.py comes from PATH
-uav-api --simulated --port 8000 --sysid 1
+uav-api start --simulated --port 8000 --sysid 1
 
 # Explicit — use this ArduPilot repository, regardless of PATH
-uav-api --simulated --ardupilot_path ~/ardupilot --port 8000 --sysid 1
+uav-api start --simulated --ardupilot_path ~/ardupilot --port 8000 --sysid 1
 ```
 
 Use `--ardupilot_path` when ArduPilot is not on your `PATH`, or when you keep several ArduPilot checkouts and want to select one per API instance.
@@ -255,7 +298,7 @@ The API supports two ArduPilot vehicles, selected at startup with `--vehicle`:
 **Run as plane in simulation:**
 
 ```bash
-uav-api --vehicle plane --simulated --speedup 1 --port 8000 --sysid 1
+uav-api start --vehicle plane --simulated --speedup 1 --port 8000 --sysid 1
 ```
 
 This spawns ArduPlane SITL (instead of ArduCopter) and registers only the plane routers. Consumer URLs are unchanged — `/command/arm`, `/movement/go_to_gps`, `/telemetry/gps` work the same way; the endpoint *set* is smaller. Plane mode exposes:
@@ -272,11 +315,11 @@ The CLI token used in `--log_console` and `--debug` is the vehicle-agnostic `VEH
 
 ```bash
 # Copter (default)
-uav-api --simulated --log_console VEHICLE ...
+uav-api start --simulated --log_console VEHICLE ...
 # console: [COPTER-1] INFO - Sending COMMAND_LONG ...
 
 # Plane
-uav-api --vehicle plane --simulated --log_console VEHICLE ...
+uav-api start --vehicle plane --simulated --log_console VEHICLE ...
 # console: [PLANE-1] INFO - Sending COMMAND_LONG ...
 ```
 
@@ -305,10 +348,10 @@ log_console=[VEHICLE, UVICORN]
 Run with:
 
 ```bash
-uav-api --config /path/to/config.ini
+uav-api start --config /path/to/config.ini
 ```
 
-**Values in the config file override CLI arguments.** The file is read after the command line is parsed, and every key it contains is written over the parsed value — so `uav-api --config drone.ini --port 9000` still listens on the port set in the file.
+**Values in the config file override CLI arguments.** The file is read after the command line is parsed, and every key it contains is written over the parsed value — so `uav-api start --config drone.ini --port 9000` still listens on the port set in the file.
 
 Only write the keys you actually want to change; omitting a key gives you its default. In particular, do **not** write `None` as a value: INI values are read as strings, so `log_path = None` produces a log file literally named `None` rather than the default path.
 
@@ -344,7 +387,7 @@ process.terminate()
 process.join(timeout=15)
 ```
 
-`spawn_with_args` accepts the same arguments as the `uav-api` CLI and returns a `multiprocessing.Process`. For a blocking call (e.g. when building your own entry point), use `run_with_args` instead:
+`spawn_with_args` accepts the same arguments as `uav-api start` and returns a `multiprocessing.Process`. For a blocking call (e.g. when building your own entry point), use `run_with_args` instead:
 
 ```python
 from uav_api.run_api import run_with_args
@@ -377,7 +420,7 @@ A successful response confirms the API is connected to the vehicle:
 
 # CLI Arguments Reference
 
-All arguments can be passed on the command line or set in an INI config file. Run `uav-api --help` for a quick reference. Note that when both are used, [values in the config file win](#using-a-configuration-file).
+All arguments can be passed on the command line or set in an INI config file. Run `uav-api start --help` for a quick reference. Note that when both are used, [values in the config file win](#using-a-configuration-file).
 
 ## General (all modes)
 
@@ -435,7 +478,7 @@ QUIC requires TLS. When `--udp` is set without `--certfile`/`--keyfile`, self-si
 **Starting the API in UDP/QUIC mode:**
 
 ```bash
-uav-api --udp --simulated --port 8000 --sysid 1
+uav-api start --udp --simulated --port 8000 --sysid 1
 ```
 
 **Consuming the API over HTTP/3 (QUIC):**
@@ -470,7 +513,7 @@ See the flight examples section below — all examples support HTTP/3 via the `-
 When `--gradys_gs <host:port>` is set, the API starts a background coroutine that POSTs the vehicle's GPS position to the Gradys GS every second:
 
 ```bash
-uav-api --port 8000 --sysid 1 --gradys_gs 192.168.1.10:5000
+uav-api start --port 8000 --sysid 1 --gradys_gs 192.168.1.10:5000
 ```
 
 Each POST to `http://<gradys_gs>/update-info/` includes: latitude, longitude, altitude, device type, a sequence number, and the API's own IP and port. This allows the Gradys ecosystem to track the UAV in real time.
@@ -480,7 +523,7 @@ Each POST to `http://<gradys_gs>/update-info/` includes: latitude, longitude, al
 When running in simulated mode, use `--gs_connection` to stream MAVLink telemetry to Mission Planner (or any GCS software):
 
 ```bash
-uav-api --simulated --sysid 1 --gs_connection [192.168.1.5:14550]
+uav-api start --simulated --sysid 1 --gs_connection [192.168.1.5:14550]
 ```
 
 Connect Mission Planner to the specified UDP address to see live position, attitude, and flight data.
@@ -493,16 +536,16 @@ Control what gets logged and where with the logging arguments:
 
 ```bash
 # Print VEHICLE and UVICORN logs to console
-uav-api --log_console VEHICLE UVICORN ...
+uav-api start --log_console VEHICLE UVICORN ...
 
 # Write all logs to a file
-uav-api --log_path ~/uav_api.log ...
+uav-api start --log_path ~/uav_api.log ...
 
 # Enable DEBUG verbosity for the VEHICLE component
-uav-api --debug VEHICLE ...
+uav-api start --debug VEHICLE ...
 
 # Save script stdout/stderr to a directory
-uav-api --script_logs ~/.uav_api/logs/script_logs ...
+uav-api start --script_logs ~/.uav_api/logs/script_logs ...
 ```
 
 Available log components: `VEHICLE`, `UVICORN`, `GRADYS_GS`, `SCRIPT`. The `VEHICLE` token routes to the active vehicle's logger; the actual line prefix you see is `[COPTER-<sysid>]` or `[PLANE-<sysid>]` depending on `--vehicle` — see [Logging in different vehicles](#logging-in-different-vehicles).
@@ -629,7 +672,7 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 
 | Path | Purpose |
 |------|---------|
-| `uav_api/run_api.py` | CLI entry point — parses args, runs setup, launches uvicorn |
+| `uav_api/run_api.py` | CLI entry point — dispatches `start` / `setup-sitl`; `start` parses args, runs setup, launches uvicorn |
 | `uav_api/api_app.py` | FastAPI app definition; conditional router registration by `--vehicle`; imports lifespan from `lifespan.py` |
 | `uav_api/lifespan.py` | Async lifespan context manager — startup/shutdown of SITL, scripts watcher, and GS task, with partial-startup cleanup |
 | `uav_api/vehicles/vehicle.py` | Shared `Vehicle` base — MAVLink connection, single receiver thread, subscriptions, common commands/waits |
@@ -640,6 +683,7 @@ curl -X POST "http://localhost:8000/peripherical/servo_output" \
 | `uav_api/gradys_gs.py` | Async coroutine that POSTs GPS location to Gradys GS every second |
 | `uav_api/log.py` | Logger configuration; routes `VEHICLE` token to `COPTER`/`PLANE` logger based on `--vehicle` |
 | `uav_api/setup.py` | Idempotent startup setup — creates the scripts, script-log and log directories (defaulted or configured) plus the ArduPilot locations file |
+| `uav_api/setup_sitl.py` | `uav-api setup-sitl` — clones, installs prerequisites for, and builds ArduPilot SITL; registers PATH and locations |
 | `uav_api/routers/copter/command.py` | Copter endpoints: arm, takeoff, land, RTL, speed, home |
 | `uav_api/routers/copter/movement.py` | Copter endpoints: go_to_gps, go_to_ned, drive, drive_body (fire-and-forget + blocking pairs), set_heading |
 | `uav_api/routers/copter/telemetry.py` | Copter endpoints: GPS, NED, compass, battery, sensor status, home info |
@@ -710,7 +754,7 @@ One of the perks of using UAV API is being able to quickly write scripts that co
 ## Running examples
 To run the following examples, start the API inside the `flight_examples` directory:
 
-  `uav-api --config ./uavs/uav_1.ini`
+  `uav-api start --config ./uavs/uav_1.ini`
 
 Note that this configuration file contains default values for parameters, change the values such that it matches your environment. You can also use your own configuration file or start the API through arguments.
 
