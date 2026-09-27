@@ -433,6 +433,7 @@ All arguments can be passed on the command line or set in an INI config file. Ru
 | `--sysid` | 10 | MAVLink system ID; must match the drone's `SYSID_THISMAV` parameter |
 | `--uav_connection` | `127.0.0.1:17171` | MAVLink address — `host:port` for UDP, or serial device path for USB |
 | `--gradys_gs` | None | `host:port` of Gradys Ground Station — enables periodic GPS location push |
+| `--mavlink_streamrate` | 5 | Rate in Hz requested from the autopilot for `MAV_DATA_STREAM_ALL`; bounds how fresh telemetry reads can be. Under SITL the effective rate is this × `--speedup`. Raise cautiously on bandwidth-limited links — see [coordinate-frames.md](docs/coordinate-frames.md#heartbeat-streamrate-and-the-drain-loop). |
 | `--scripts_path` | `~/.uav_api/scripts` | Directory where uploaded scripts are saved and executed from (copter mode). Created at startup if missing. |
 | `--python_path` | `python3` | Python binary used to run uploaded `.py` scripts |
 

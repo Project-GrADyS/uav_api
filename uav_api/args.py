@@ -50,6 +50,16 @@ def coerce_bool(key, value):
         f"{sorted(_TRUE_VALUES)} or {sorted(_FALSE_VALUES)}."
     )
 
+def positive_int(value):
+    """argparse type for a strictly positive integer."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid integer: {value!r}")
+    if number <= 0:
+        raise argparse.ArgumentTypeError(f"must be greater than 0, got {number}")
+    return number
+
 def parse_args(raw_args=None):
     parser = argparse.ArgumentParser(
         prog="uav-api start",
@@ -284,6 +294,20 @@ def parse_api(api_parser):
     )
 
     api_parser.add_argument(
+        '--mavlink_streamrate',
+        dest='mavlink_streamrate',
+        type=positive_int,
+        default=5,
+        help="Rate, in Hz, requested from the autopilot for MAV_DATA_STREAM_ALL. Feeds every "
+             "cached telemetry read, so it bounds how fresh telemetry can be. Under SITL the "
+             "effective rate is this value times --speedup, so keep it low for speedup'd "
+             "simulation. Raise it for fresher telemetry on a real vehicle, cautiously -- "
+             "MAV_DATA_STREAM_ALL is one knob for every stream, a SiK radio at 57.6 kbaud "
+             "cannot carry them all at high rates, and saturation shows up as late messages "
+             "and missed acks rather than a startup error."
+    )
+
+    api_parser.add_argument(
         '--scripts_path',
         dest='scripts_path',
         type=str,
@@ -414,4 +438,4 @@ def parse_udp(udp_parser):
         dest='keyfile',
         default=None,
         help='Path to TLS private key PEM file (for --udp mode). Auto-generated under <root_dir>/certs if omitted.'
-    )
+    )

@@ -98,3 +98,29 @@ def test_connection_type_accepts_known_values(value):
 def test_connection_type_rejects_unknown_value():
     with pytest.raises(SystemExit):
         parse_args(["--connection_type", "serial"])
+
+
+# --- --mavlink_streamrate ---
+
+def test_streamrate_default_matches_vehicle_default():
+    # The CLI default must not drift from the one Vehicle falls back to.
+    import inspect
+    from uav_api.vehicles.vehicle import Vehicle
+    vehicle_default = inspect.signature(Vehicle.__init__).parameters["default_stream_rate"].default
+    assert parse_args([]).mavlink_streamrate == vehicle_default == 5
+
+
+def test_streamrate_cli_value_is_int():
+    assert parse_args(["--mavlink_streamrate", "10"]).mavlink_streamrate == 10
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "fast"])
+def test_streamrate_rejects_non_positive_or_non_int(value):
+    with pytest.raises(SystemExit):
+        parse_args(["--mavlink_streamrate", value])
+
+
+def test_streamrate_from_config_arrives_as_string(tmp_path):
+    # Config values bypass argparse's type; init_copter/init_plane int() them.
+    config = write_ini(tmp_path, "[api]\nmavlink_streamrate = 30\n")
+    assert parse_args(["--config", config]).mavlink_streamrate == "30"
