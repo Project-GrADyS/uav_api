@@ -36,7 +36,7 @@ def _api_version() -> str:
         return package_version("uav_api")
     except PackageNotFoundError:
         # Running from a source tree without an installed distribution.
-        return "0.3.0"
+        return "0.3.1"
 
 def create_app(args) -> FastAPI:
     description = f"""

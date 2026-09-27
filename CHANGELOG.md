@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-27
+
 ### Added
 - `uav-api setup-sitl`: one command that installs ArduPilot SITL. It clones
   ArduPilot (or reuses an existing checkout), runs the Debian/Ubuntu
@@ -407,6 +409,7 @@ Initial public release (renamed from `uav_control`). Copter GUIDED control over
 HTTP, ArduPilot SITL support, `sim_speedup` control, `take_picture`, Swagger
 docs, INI config, and initial flight examples.
 
+[0.3.1]: https://github.com/Project-GrADyS/uav_api/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Project-GrADyS/uav_api/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/Project-GrADyS/uav_api/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Project-GrADyS/uav_api/compare/v0.2.0...v0.2.1
